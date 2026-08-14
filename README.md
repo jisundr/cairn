@@ -1,3 +1,5 @@
 # cairn
 
-Opinionated agentic development framework — Claude Code plugin.
+My personal bag of tricks. No warranty, no gates, use your judgment.
+
+A Claude Code plugin — skills, agents, and commands I've found useful. Nothing here is mandatory; take what's relevant and ignore the rest.

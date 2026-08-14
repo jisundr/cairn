@@ -1,12 +1,13 @@
-# Design: Port `requirements-engineer` from maestro into cairn
+# Design: Port `requirements-engineer` + `requirements-auditor` from maestro into cairn
 
 ## Summary
 
-Port maestro's `requirements-engineer` agent into cairn as a single, self-contained agent — no cross-agent handoffs, no fixed-roster dependencies. This is the first agent-plus-skill port from maestro into cairn, and the first entry in cairn's `skills/` directory (currently empty).
+Port maestro's `requirements-engineer` agent into cairn, plus a second, trimmed `requirements-auditor` agent covering the one slice of `documentation-auditor` that's actually relevant to requirements docs (cross-artifact traceability). Both are self-contained — no cross-agent auto-handoffs, no fixed-roster dependencies. This is the first agent-plus-skill port from maestro into cairn, and the first entries in cairn's `skills/` directory (currently empty).
 
 ## Source
 
 - `~/Projects/maestro/.claude/agents/requirements-engineer.md`
+- `~/Projects/maestro/.claude/agents/documentation-auditor.md` (trimmed — see `requirements-auditor` below)
 - `~/Projects/maestro/.claude/skills/writer-agent-guide/SKILL.md`
 - `~/Projects/maestro/.claude/skills/{project-definition,prd,user-stories,user-flows}-guide/SKILL.md`
 
@@ -22,7 +23,7 @@ cairn's design is the opposite: no fixed agent roster, self-contained agents (`i
 
 | maestro feature | Why dropped |
 |---|---|
-| `PHASE HANDOFF → documentation-auditor` | Reaches for an agent that isn't being ported; cairn agents don't hand off to a fixed roster. |
+| Automatic `PHASE HANDOFF → documentation-auditor` | `requirements-auditor` (below) IS being ported, but as a separately-dispatched agent, not an automatic post-write handoff — matches cairn's no-gates philosophy. `requirements-engineer` stays terminal; running the auditor afterward is optional, at the user's (or Claude's) discretion. |
 | Feature Status Gate (reads `docs/project-definition/02_identity.md` Section 4) | Keyed to a maestro-wide feature-status tracking file cairn has no counterpart for. |
 | Feature Scope Resolution / feature-scoped output paths (`docs/features/<name>/requirements/`) | Keyed to a `Feature Scope:` field maestro's own `intent-analyzer` injects into opening context; cairn's `intent-analyzer` has no such field. Flat paths only. |
 | Optional Competitive Input (reads `competitor-analyst` snapshots) | `competitor-analyst` isn't being ported; this was optional/presence-gated in maestro too, so dropping it changes nothing structurally. |
@@ -98,12 +99,51 @@ One file (splittable later — nothing here locks in a merge). Merges:
 - From `writer-agent-guide`: Suggestion Assistance Rule, Shared Enforcement Rules, Document Metadata template (simplified `Derived From`), Discovery Phase shared rules, Upstream Existence Check procedure, Discovery Phase full flow, Draft Phase write-tool steps (mermaid step removed), Minimal Discovery + Approach Proposal templates (Draft Mode), Exploratory Callout template, Final Review Phase template, Update Mode shared steps, generic exit rows.
 - From the 4 doc guides: discovery dimensions, artifact format (Scope & Boundaries table removed from `project-definition` and `prd` templates per the table above), writing standards — one section per doc type, selected by the agent at Skill Loading time based on target document.
 
+## Agent: `agents/requirements-auditor.md`
+
+Trimmed from maestro's `documentation-auditor`. Only the slice relevant to a requirements-only port survives.
+
+**Dropped from `documentation-auditor`:**
+
+| maestro feature | Why dropped |
+|---|---|
+| Check 2 (Agent Roster Accuracy) | About README vs `.claude/CLAUDE.md` agent listings — unrelated to requirements docs. |
+| Check 3 (Setup/README accuracy against source), Check 4 (README/setup/API completeness), Check 6 (style/formatting) | All about README/setup/API docs — that's `documentation-engineer`'s territory, not ported (see doc-sync discussion above). |
+| Check 7c/7d/7e/7f/7g (architecture/API/DB/UX alignment) | No architecture/API/DB/UX-producing agents exist in cairn to check against. |
+| Check 8 (Feature Status Consistency) | Reads `docs/project-definition/02_identity.md` — dropped along with Feature Status Gate in `requirements-engineer`. |
+| CROSS-FEATURE VALIDATION MODE | Depends on `docs/features/*/` — dropped along with Feature Scope Resolution. |
+| META AGENT SYNC MODE | Hands off to `release-manager` — not ported. |
+| COMPETITOR ANALYSIS UNVERIFIED CARVE-OUT | No `competitor-analyst` output exists to carve out. |
+| SYNC HANDOFF block / agent-routing table | No automatic handoff (see above) — findings are reported, not routed. |
+| `.claude/`-scope exclusion note, `meta-auditor` cross-reference | Meta-agent concerns, not applicable. |
+
+**Kept:**
+- Check 1 (Existence/Coverage), narrowed to requirements docs only: downstream doc exists without its required upstream → `HIGH`.
+- Check 7a (PRD → user-stories traceability: every `FR-###` has a corresponding story) and 7b (user-flows → user-stories coverage: every flow has a corresponding story).
+- DRAFT MODE ARTIFACT AWARENESS — downgrades Check 1/7 completeness-type findings to `INFO` for docs carrying the `**Draft**` callout.
+- FOCUSED REVIEW MODE — audit a single specified document rather than the whole set.
+- Findings classification tiers (CRITICAL/HIGH/MEDIUM/LOW/INFO) and the AUDIT REPORT format (finding counts table + `DOC-###` detail blocks).
+- Read-only — never writes or modifies files.
+
+```yaml
+---
+name: requirements-auditor
+description: "Use this agent to validate cross-artifact consistency across docs/requirements/ — checking that PRD functional requirements trace to user stories, and user flows trace to user stories. Read-only; reports findings, does not fix them. Invoke after updating any requirements doc, or on request to check whether the requirements set is internally consistent."
+tools: Read, Glob, Grep
+model: opus
+color: orange
+---
+```
+
+Body: SYSTEM ROLE (read-only validator) → VALIDATION CHECKS (Check 1 + 7a/7b as scoped above) → DRAFT MODE ARTIFACT AWARENESS → FOCUSED REVIEW MODE → FINDINGS CLASSIFICATION → AUDIT REPORT FORMAT → COMPLETION (terminal, same `Running → **🟠 requirements-auditor**` banner convention, `Result` block lists finding counts by severity — no SYNC HANDOFF, no agent routing) → EXIT & DERAILMENT HANDLING (file unreadable, no requirements docs found, user asks it to fix issues → "My role is validation only; re-run requirements-engineer in Update Mode for the flagged doc.").
+
 ## File changes
 
 - **New:** `agents/requirements-engineer.md`
+- **New:** `agents/requirements-auditor.md`
 - **New:** `skills/requirements-writing/SKILL.md`
-- **Edit:** `.claude-plugin/plugin.json` — version `0.6.0` → `0.7.0` (new user-visible agent + skill, per CLAUDE.md versioning rule)
-- **Edit:** `CLAUDE.md` — add a `requirements-engineer` entry to the Architecture section describing scope, dependency chain, output location, and the maestro-port trimming decisions above (so future edits don't accidentally reintroduce dropped coupling)
+- **Edit:** `.claude-plugin/plugin.json` — version `0.6.0` → `0.7.0` (new user-visible agents + skill, per CLAUDE.md versioning rule)
+- **Edit:** `CLAUDE.md` — add `requirements-engineer` and `requirements-auditor` entries to the Architecture section describing scope, dependency chain, output location, and the maestro-port trimming decisions above (so future edits don't accidentally reintroduce dropped coupling)
 
 ## Testing / verification
 
@@ -115,6 +155,8 @@ claude -p "Produce a project definition for a simple todo app" --plugin-dir /pat
 ```
 
 Run once for the tier-1 doc (project-definition, no upstream — should proceed straight to discovery), once for a tier-2/3 doc with no upstream present (should `TERMINATED`), and once for a Draft Mode trigger. Inspect the scratch directory's `docs/requirements/*.md` output, not just the reported text.
+
+For `requirements-auditor`: produce a PRD with an `FR-001` that has no corresponding user story, then run the auditor against `docs/requirements/` and confirm it reports a `HIGH` traceability finding with the right `DOC-###` format — then produce the missing story and confirm a clean re-run.
 
 ## Open questions
 

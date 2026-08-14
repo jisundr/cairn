@@ -4,7 +4,7 @@ description: "Wire cairn's intent-analyzer as this project's mandatory entrypoin
 
 ## Your task
 
-Wire cairn into this project's root `CLAUDE.md` as the mandatory entrypoint, matching how maestro forces itself as the entrypoint for consuming projects.
+Wire cairn into this project's root `CLAUDE.md` as the mandatory entrypoint.
 
 1. **Check for `CLAUDE.md` at the project root.**
    - If it does **not** exist: tell the user to run `/init` first (Claude Code's built-in command — documents the codebase into a `CLAUDE.md`), then re-run `/cairn-setup`. Stop here; do not proceed further in this case.

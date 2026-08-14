@@ -1,6 +1,9 @@
 {
-  "owner": "jisundr",
+  "owner": {
+    "name": "jisundr"
+  },
   "name": "cairn-plugins",
+  "description": "My personal bag of tricks. No warranty, no gates, use your judgment.",
   "plugins": [
     {
       "name": "cairn",

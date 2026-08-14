@@ -21,6 +21,7 @@ This is the first multi-agent-plus-skill port from maestro into cairn, and the f
 - `~/Projects/maestro/.claude/skills/{project-definition,prd,user-stories,user-flows}-guide/SKILL.md` (requirements-engineer doc types)
 - `~/Projects/maestro/.claude/skills/{ux-spec,ui-layout-spec,design-system}-guide/SKILL.md` (product-designer doc types)
 - `~/Projects/maestro/.claude/skills/{architecture-spec,db-schema,api-spec,adr}-guide/SKILL.md` + `{db-standards,api-standards}-guide/SKILL.md` (solution-architect doc types + standards)
+- `~/Projects/maestro/.claude/skills/mermaid-diagram-guide/SKILL.md` (diagram rules — used by `ux-spec.md`, `architecture-spec.md`, `db-schema.md`, and ADRs; verified NOT dead weight for the two doc-producing agents other than `requirements-engineer` — see below)
 - `~/Projects/maestro/.claude/skills/impeccable-guide/SKILL.md` (reference only — see Impeccable section below; the `impeccable` tool itself is NOT a source, see below)
 
 ## Scope decision
@@ -49,9 +50,17 @@ cairn's design is the opposite: no fixed agent roster, self-contained agents (`i
 | Feature Scope Resolution / feature-scoped output paths (`docs/features/<name>/requirements/`) | Keyed to a `Feature Scope:` field maestro's own `intent-analyzer` injects into opening context; cairn's `intent-analyzer` has no such field. Flat paths only. |
 | Optional Competitive Input (reads `competitor-analyst` snapshots) | `competitor-analyst` isn't being ported; optional/presence-gated in maestro too, so dropping changes nothing structurally. |
 | ClickUp exit row (defers to `project-manager`) | `project-manager` isn't being ported. |
-| `mermaid-diagram-guide` load step in Draft Phase | None of the 4 artifact templates use diagrams. |
+| `mermaid-diagram-guide` load step in Draft Phase | None of `requirements-engineer`'s 4 artifact templates use diagrams. **Scoped to this agent only** — verified `ux-spec.md`, `architecture-spec.md`, `db-schema.md`, and ADRs DO require it; kept for `product-designer`/`solution-architect` (see their sections below), not dropped globally. |
 | Adaptive Output Rule (single-file vs numbered multi-file split) | None of the 4 doc-type guides define a Split Condition. |
 | "Scope & Boundaries" 4-status-table section in Project Definition & PRD templates | Artifact-side half of the Feature Status Gate mechanic, dropped along with the gate. Goals/Non-Goals and Out of Scope lists cover the same need. |
+
+### Stale writing-standard note, found across 5 more doc-type guides
+
+Every doc-type guide checked (`ux-spec`, `ui-layout-spec`, `architecture-spec`, `db-schema`, `api-spec` — verified by reading each directly, not assumed from the `project-definition`/`prd` fix alone) carries the same trailing note:
+
+> **Scope or Feature Coverage sections:** If a Scope or Feature Coverage section is included, represent it as status tables (one per feature status category: Implemented, Current, Pending Review — Pre-existing, Pending Review — Not Yet Implemented).
+
+Same Feature-Status-Gate-tied convention already dropped from `project-definition.md`/`prd.md`'s actual template section — this is the conditional writing-standard version of the same dead rule (applies *if* such a section is ever added, which nothing in the ported templates does). Dropped from all 5 doc-type skills for the same reason. `user-stories`, `user-flows`, `design-system`, and `adr` guides don't carry this note — verified clean, no change needed there.
 
 ### From `product-designer`
 
@@ -64,6 +73,7 @@ cairn's design is the opposite: no fixed agent roster, self-contained agents (`i
 **Kept, adapted:**
 - **Reference Artifact Intake** (UI Layout Spec & Design System only) — reads a local file or fetches a `claude.ai/artifacts`-style URL as visual reference, cross-checks against upstream docs, flags conflicts rather than silently overriding. Fully self-contained (`Read`/`WebFetch` only), no cross-agent dependency — kept as-is.
 - **Impeccable Shape Pass** (UI Layout Spec only) — see below, adapted rather than dropped or kept as-is.
+- **`mermaid-diagram-guide`** (UX Specification only — its "Interaction Flows" section requires one Mermaid flowchart per user journey). NOT loaded for UI Layout Specification (uses ASCII/text layout diagrams, not Mermaid) or Design System (no diagrams in its template). Verified by reading all 3 doc-type guides directly, not assumed from the shared `writer-agent-guide` step alone.
 
 ### Impeccable — hard-required, never vendored
 
@@ -95,6 +105,7 @@ Instead, `product-designer` treats it the way `idea-explorer` treats `superpower
 - **ADR Mode** — fully self-contained (own numbering via `Glob`-scan of `docs/adr/`, own skill, immutable-after-write content with status-only updates). No dependency on any un-ported agent. Kept as-is.
 - `db-standards-guide` / `api-standards-guide` — technical standards loaded during Draft Phase, kept.
 - `graphql-guide` — conditional load when the API surface is GraphQL, kept (self-contained skill file, no cross-agent dependency).
+- **`mermaid-diagram-guide`** — loaded for `architecture-spec.md` (Architecture Diagram, Component Interactions, Deployment Model — 3 separate diagram sections) and `db-schema.md` (Entity Relationship Diagram), and explicitly required by `adr-guide` itself for ADRs. NOT loaded for `api-spec.md` (no diagrams in its template — verified, not assumed).
 
 ### From `documentation-auditor`
 
@@ -212,10 +223,11 @@ Three writer agents now share the same underlying mechanics (discovery phase, dr
 
 - **`skills/writer-shared/SKILL.md`** — the shared mechanics, equivalent to maestro's `writer-agent-guide` trimmed of Feature Status Gate, Feature Scope Resolution, and the Draft Mode templates (Draft Mode is `requirements-engineer`-only, kept in its own skill instead — see below). Loaded by all three writer agents.
 - **`skills/requirements-writing/SKILL.md`** — the 4 requirements doc types (discovery dimensions, artifact format, writing standards) + Draft Mode templates (Minimal Discovery, Approach Proposal, Exploratory Callout — still `requirements-engineer`-only).
-- **`skills/product-design-writing/SKILL.md`** — the 3 design doc types + Reference Artifact Intake + Impeccable Shape Pass procedure.
-- **`skills/solution-architecture-writing/SKILL.md`** — the 3 technical doc types + ADR Mode (numbering, sub-modes, immutability rule) + `db-standards-guide`/`api-standards-guide`/`graphql-guide` content merged in.
+- **`skills/product-design-writing/SKILL.md`** — the 3 design doc types + Reference Artifact Intake + Impeccable Shape Pass procedure. References `skills/mermaid-diagrams/SKILL.md` for `ux-spec.md` only.
+- **`skills/solution-architecture-writing/SKILL.md`** — the 3 technical doc types + ADR Mode (numbering, sub-modes, immutability rule) + `db-standards-guide`/`api-standards-guide`/`graphql-guide` content merged in. References `skills/mermaid-diagrams/SKILL.md` for `architecture-spec.md`, `db-schema.md`, and ADRs — not `api-spec.md`.
+- **`skills/mermaid-diagrams/SKILL.md`** — ported from `mermaid-diagram-guide` as-is (generic diagram-formatting rules, no cross-agent dependency). Loaded conditionally, per doc type, by `product-designer` and `solution-architect` — never by `requirements-engineer` (none of its 4 doc types use diagrams).
 
-Four files total (plus none for the two doc agents, which stay skill-free like their maestro originals). Splittable further later — nothing here locks in the grouping.
+Five files total (plus none for the two doc agents, which stay skill-free like their maestro originals). Splittable further later — nothing here locks in the grouping.
 
 ## End-to-end sequence (documented order, not a `Workflow` script)
 
@@ -244,6 +256,7 @@ Because every writer-trio run is a live main-thread interview, this is a sequenc
 - **New:** `skills/requirements-writing/SKILL.md`
 - **New:** `skills/product-design-writing/SKILL.md`
 - **New:** `skills/solution-architecture-writing/SKILL.md`
+- **New:** `skills/mermaid-diagrams/SKILL.md`
 - **Edit:** `.claude-plugin/plugin.json` — version `0.6.0` → `0.7.0` (new user-visible agents + skills, per CLAUDE.md versioning rule)
 - **Edit:** `CLAUDE.md` — add entries for all five agents to the Architecture section (scope, dependency chains, check coverage, mode coverage), the maestro-port trimming decisions above, the Impeccable hard-requirement note, and the End-to-end sequence as documented guidance
 - **Edit:** `README.md` — add bullets for all five agents to "## Agents" (feeds `documentation-auditor`'s Check 2a/2b)
@@ -259,7 +272,7 @@ claude -p "Produce a project definition for a simple todo app" --plugin-dir /pat
 
 - **`requirements-engineer`:** tier-1 doc with no upstream (proceeds), tier-2/3 doc with no upstream (`TERMINATED`), Draft Mode trigger. Inspect `docs/requirements/*.md`.
 - **`product-designer`:** `ux-spec.md` with `prd.md`+`user-flows.md` present; `ui-layout-spec.md` with `.claude/skills/impeccable` absent (confirm scoped `ABORT`, not a full-agent failure — `design-system.md` should still work in the same project); Reference Artifact Intake with a local file path; `ui-layout-spec.md` with impeccable present (confirm `shape`'s output pre-fills discovery dimensions rather than running as a second full interview — the specific regression to watch for).
-- **`solution-architect`:** `architecture-spec.md` with upstream present; ADR Mode new-decision flow (confirm numbering starts at `0001` in an empty `docs/adr/`); status-update flow on an existing ADR (confirm content is untouched, only `## Status` changes).
+- **`solution-architect`:** `architecture-spec.md` with upstream present (confirm the 3 Mermaid diagram sections are actually populated, not left as placeholders); ADR Mode new-decision flow (confirm numbering starts at `0001` in an empty `docs/adr/`, and that a Mermaid diagram is included per `adr-guide`); status-update flow on an existing ADR (confirm content is untouched, only `## Status` changes); `api-spec.md` (confirm no diagram-loading step fires — it shouldn't need one).
 - **`documentation-auditor`:** PRD with an untraced `FR-001` → confirm `HIGH` Check 7a finding; stale README referencing a nonexistent file → confirm Check 3 finding; run after `solution-architect`/`product-designer` produce docs to confirm Checks 7c-7g go live (no longer permanently dormant).
 - **`documentation-engineer`:** Create Mode on a scratch project with no README; Update Mode on an existing README with one stale section (confirm targeted `Edit`, not full rewrite, absent explicit confirmation).
 

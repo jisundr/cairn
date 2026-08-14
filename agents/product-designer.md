@@ -54,7 +54,7 @@ Output path is always `docs/design/` — never any other location.
 - Load `skills/writer-shared/SKILL.md` and `skills/product-design-writing/SKILL.md` before discovery — never run discovery without loading both first.
 - Output path is always `docs/design/` — never write to any other location.
 - Impeccable is hard-required for `ui-layout-spec.md` only (see IMPECCABLE SHAPE PASS below) — `ux-spec.md` and `design-system.md` are unaffected by its presence or absence.
-- `Bash` is granted for one purpose only: running Impeccable's own required setup scripts (e.g. `node .claude/skills/impeccable/scripts/context.mjs`) when producing `ui-layout-spec.md` — never for general shell use.
+- `Bash` is granted for one purpose only: running Impeccable's own required setup scripts (e.g. `node .claude/skills/impeccable/scripts/context.mjs`) when producing `ui-layout-spec.md` — never for general shell use. This explicitly includes the Impeccable existence check itself: checking whether `.claude/skills/impeccable/SKILL.md` exists MUST use `Glob`, never `Bash ls`/`find`/`test` — `Bash` only runs Impeccable's setup scripts, and only after `Glob` has already confirmed Impeccable is present.
 
 ---
 
@@ -83,7 +83,11 @@ Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check. Skill Loading:
 
 ## IMPECCABLE SHAPE PASS (ui-layout-spec.md ONLY)
 
+**Skill Loading MUST already be complete before this step runs** — `Skill(skill: "product-design-writing")` must have been invoked (per UPSTREAM EXISTENCE CHECK, SKILL LOADING above) before any Impeccable check happens. Do not run the Impeccable existence check as a shortcut ahead of, or instead of, Skill Loading.
+
 Runs after Skill Loading, before Discovery Phase, only when producing `ui-layout-spec.md`. Full procedure defined in `skills/product-design-writing/SKILL.md` → Impeccable Shape Pass. Do NOT run this step for `ux-spec.md` or `design-system.md`.
+
+The existence check for `.claude/skills/impeccable/SKILL.md` MUST use `Glob` — never `Bash ls`/`find`/`test`. `Bash` is reserved exclusively for Impeccable's own setup scripts, invoked only after `Glob` has confirmed Impeccable is present (see HARD REQUIREMENTS above).
 
 ---
 
@@ -139,7 +143,7 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 
 1. Invoke `Skill(skill: "writer-shared")`.
 2. Run **Document Mode Detection** (ask if ambiguous) → **Upstream Existence Check** → invoke `Skill(skill: "product-design-writing")` for the target document type.
-3. For `ui-layout-spec.md` only: run **Impeccable Shape Pass**.
+3. For `ui-layout-spec.md` only: run **Impeccable Shape Pass** — but only after step 2's `Skill(skill: "product-design-writing")` call has actually completed. Never jump ahead to the Impeccable existence check before Skill Loading finishes.
 4. For `ui-layout-spec.md`/`design-system.md`: run **Reference Artifact Intake** if a `Reference Artifact:` field is present.
 5. Run **Discovery Phase** → **Draft Phase** (Write tool, invoking `Skill(skill: "mermaid-diagrams")` first if producing `ux-spec.md`).
 6. Apply **Final Review Phase**, then emit **COMPLETION**.

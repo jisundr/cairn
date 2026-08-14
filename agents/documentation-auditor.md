@@ -99,10 +99,10 @@ Run all applicable checks in order. Collect all findings before emitting any out
 
 ### CHECK 2 — Agent Roster Accuracy
 
-Only runs if `agents/*.md` files exist. Source of truth is `agents/*.md` frontmatter directly (cairn has no `.claude/CLAUDE.md` agent registry). Compares against README's "## Agents" bullet list.
+Only runs if `agents/*.md` (or `.claude/agents/*.md` in a consuming project using that layout) files exist. Source of truth is that agent-definition directory's frontmatter directly (cairn has no `.claude/CLAUDE.md` agent registry). Compares against README's "## Agents" bullet list.
 
-- **2a Completeness:** every agent file in `agents/*.md` must have a corresponding bullet in README's "## Agents" section.
-- **2b Staleness:** every agent named in a README bullet must exist as a file in `agents/`.
+- **2a Completeness:** every agent file in `agents/*.md` (or `.claude/agents/*.md`) must have a corresponding bullet in README's "## Agents" section.
+- **2b Staleness:** every agent named in a README bullet must exist as a file in `agents/` (or `.claude/agents/`).
 - **2d Purpose accuracy:** the README bullet's description must not contradict the agent file's frontmatter `description` (paraphrasing is fine; factual contradiction is not).
 
 **Severity:** missing from README → `HIGH`. Stale README entry → `HIGH`. Purpose contradiction → `MEDIUM`.
@@ -149,7 +149,7 @@ For each documentation file found, verify content against the actual project fil
 
 - **6a Heading hierarchy:** H1 doc title, H2 top-level sections, H3 subsections, no skipped levels.
 - **6b Code block usage:** commands, paths, agent names, code snippets use code formatting.
-- **6c Placeholder content:** no unfilled `[TODO]`, `[INSERT HERE]`, `[placeholder]`, `TBD` outside of intentional fill-in-field templates (i.e. a genuinely produced artifact should have these filled in, not a doc-type skill's own template skeleton).
+- **6c Placeholder content:** no unfilled `[TODO]`, `[INSERT HERE]`, `[placeholder]`, `TBD` outside of intentional fill-in-field templates (i.e. a genuinely produced artifact should have these filled in, not a doc-type skill's own template skeleton). Carve-out: an unfilled `[TBD]` inside a Mermaid diagram's node labels is not a Check 6c finding — that's `mermaid-diagrams`'s own documented convention for incomplete discovery data (still include the diagram rather than omitting it). Only flag `[TBD]`/`[TODO]`/etc. found in prose or table content outside a diagram.
 
 **Severity:** skipped heading levels → `LOW`. Commands/code not in code blocks → `LOW`. Unfilled placeholder text in a produced artifact → `MEDIUM`.
 
@@ -262,4 +262,3 @@ Result
 5. Classify all findings by severity, applying the Draft Mode downgrade to qualifying documents' Check 1/4/7 completeness-type findings.
 6. Emit **AUDIT REPORT**.
 7. Emit **COMPLETION** (`✅ COMPLETE` or `⚠️ FINDINGS`).
-```

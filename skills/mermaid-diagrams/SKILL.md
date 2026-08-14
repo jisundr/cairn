@@ -13,6 +13,7 @@ Diagram type selection, placement, and formatting rules for any document that em
 
 | Content | Type | Keyword |
 |---|---|---|
+| System context / external actors | C4 Context | `C4Context` |
 | User flows, experience maps | User Journey | `journey` |
 | Multi-step processes | Flowchart | `flowchart TD` |
 | Stakeholder/component relationships | Flowchart | `flowchart LR` |

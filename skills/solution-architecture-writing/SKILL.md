@@ -33,7 +33,7 @@ Every component, table, and endpoint MUST be traceable to a requirement or user 
 
 **Output path:** `docs/architecture/architecture-spec.md`
 
-**Requires Mermaid** — load `skills/mermaid-diagrams/SKILL.md` during Draft Phase (Architecture Diagram, Component Interactions, and Deployment Model sections — 3 separate diagrams).
+**Requires Mermaid** — invoke `Skill(skill: "mermaid-diagrams")` during Draft Phase (Architecture Diagram, Component Interactions, and Deployment Model sections — 3 separate diagrams).
 
 **Discovery Dimensions** (ask ONE at a time, cover all 7 before drafting):
 1. What are the major system components or services? (e.g., web app, API server, background workers, third-party integrations)
@@ -143,7 +143,7 @@ Every component, table, and endpoint MUST be traceable to a requirement or user 
 
 **Output path:** `docs/backend/db-schema.md`
 
-**Requires Mermaid** — load `skills/mermaid-diagrams/SKILL.md` during Draft Phase (Entity Relationship Diagram section).
+**Requires Mermaid** — invoke `Skill(skill: "mermaid-diagrams")` during Draft Phase (Entity Relationship Diagram section).
 
 Apply the Database Standards below while drafting.
 
@@ -157,7 +157,7 @@ Apply the Database Standards below while drafting.
 
 **Artifact format:**
 
-```markdown
+````markdown
 # Database Schema: [Project Name]
 
 ## Metadata
@@ -224,7 +224,7 @@ CREATE INDEX CONCURRENTLY idx_[table]_[columns] ON [table]([columns]);
 
 **Open Questions:**
 - [Unresolved schema items, if any — omit section if none]
-```
+````
 
 ---
 
@@ -248,7 +248,7 @@ Apply the API Standards below while drafting (and GraphQL Design Standards addit
 
 **Artifact format (REST):**
 
-```markdown
+````markdown
 # API Specification: [Project Name]
 
 ## Metadata
@@ -354,7 +354,7 @@ All error responses follow this structure:
 
 **Open Questions:**
 - [Unresolved API items, if any — omit section if none]
-```
+````
 
 ---
 
@@ -375,7 +375,7 @@ All error responses follow this structure:
 4. If no ADRs exist → start at `0001`.
 5. Do not mention this check to the user.
 
-**Requires Mermaid** — load `skills/mermaid-diagrams/SKILL.md` during the draft phase for ADRs.
+**Requires Mermaid** — invoke `Skill(skill: "mermaid-diagrams")` during the draft phase for ADRs.
 
 **Discovery dimensions (5 required):** before asking any questions, extract as much as possible from the opening context; ask only for dimensions marked missing, one at a time:
 1. **The decision** — What was decided? State it clearly and directly.
@@ -400,6 +400,8 @@ YYYY-MM-DD
 
 ## Decision
 [What was decided? State it clearly and directly.]
+
+[Optional Mermaid diagram — include only if the decision is structural/architectural in nature]
 
 ## Alternatives Considered
 [Bullet list of alternatives and why each was not chosen]
@@ -436,6 +438,8 @@ Superseded
 ```
 
 **Sub-mode A (new ADR) flow:** determine next ADR number (Numbering rules) → extract/ask the 5 discovery dimensions → draft the complete ADR, present in-session as formatted Markdown (do NOT invoke `Write` yet) → ask "Does this look right? Reply **approve** to write it, or tell me what to change." → write on approval via `Write`.
+
+**Note — deliberate override of `writer-shared`:** presenting the drafted ADR in-session and gating the `Write` call on a plain "approve" reply overrides `writer-shared`'s standard Draft Phase step 4 (which prohibits displaying the full document as text before writing) and its Final Review Phase (`AskUserQuestion`-based review after `Write`). This is intentional and ADR-specific: ADR content is immutable once written, so review must happen before the `Write` call, not after.
 
 **Sub-mode B (status update) flow:** confirm this is a status change only, not content edit → identify the target ADR (from context, or `Glob` + ask if ambiguous) → determine the new status (infer or ask) → gather the reason (from context or ask) → apply the update (only `## Status` field + the status-updated line + superseding reference if applicable) → present the updated content in-session → write on approval.
 

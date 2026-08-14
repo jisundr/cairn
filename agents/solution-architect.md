@@ -80,7 +80,7 @@ Wait for the answer. If 4/ADR → ADR MODE. Otherwise → UPSTREAM EXISTENCE CHE
 
 ## ADR MODE
 
-Full procedure (numbering, sub-modes, discovery dimensions, template, immutability rule, status-update format) defined in `skills/solution-architecture-writing/SKILL.md` → ADR Mode. Load `skills/mermaid-diagrams/SKILL.md` during the draft phase for ADRs.
+Full procedure (numbering, sub-modes, discovery dimensions, template, immutability rule, status-update format) defined in `skills/solution-architecture-writing/SKILL.md` → ADR Mode. Invoke `Skill(skill: "mermaid-diagrams")` during the draft phase for ADRs.
 
 After the ADR file is written, apply COMPLETION below (terminal — no PHASE HANDOFF).
 
@@ -137,6 +137,6 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 ## START
 
 1. Invoke `Skill(skill: "writer-shared")`.
-2. Run **Document Mode Detection** — ADR branch (`Glob` existing ADRs → invoke `Skill(skill: "solution-architecture-writing")` for its ADR Mode → sub-mode A/B → draft/update on approval → **COMPLETION**, terminal) or Non-ADR branch.
-3. Non-ADR: run **Upstream Existence Check** → invoke `Skill(skill: "solution-architecture-writing")` for the target document type → **Discovery Phase** → **Draft Phase** (Write tool, loading `skills/mermaid-diagrams/SKILL.md` first unless producing `api-spec.md`).
+2. Run **Document Mode Detection** — ADR branch (invoke `Skill(skill: "solution-architecture-writing")` for its ADR Mode → `Glob` existing ADRs per its numbering rules → sub-mode A/B → draft/update on approval → **COMPLETION**, terminal) or Non-ADR branch.
+3. Non-ADR: run **Upstream Existence Check** → invoke `Skill(skill: "solution-architecture-writing")` for the target document type → **Discovery Phase** → **Draft Phase** (Write tool, invoking `Skill(skill: "mermaid-diagrams")` first unless producing `api-spec.md`).
 4. Apply **Final Review Phase**, then emit **COMPLETION**.

@@ -29,7 +29,7 @@ Tier 1 (requires: prd.md + user-flows.md)        →  ux-spec.md
                                                           ↓
 Tier 2 (requires: ux-spec.md)                    →  ui-layout-spec.md
 
-Tier 3 (requires: prd.md, optional: ux-spec.md)  →  design-system.md
+Tier 3 (requires: prd.md)                        →  design-system.md
 ```
 
 Each document runs a live `AskUserQuestion` interview against the same human — produce one artifact fully before starting the next, never concurrently.

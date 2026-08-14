@@ -125,7 +125,7 @@ Loaded by `product-designer` for all 3 design document types, alongside `writer-
 
 **Artifact format:**
 
-```markdown
+````markdown
 # UI Layout Specification: [Project Name]
 
 ## Metadata
@@ -189,7 +189,7 @@ Footer
 
 **Open Questions:**
 - [Unresolved structural items, if any — omit section if none]
-```
+````
 
 ---
 

@@ -48,3 +48,16 @@ Two distinct kinds of test, don't conflate them:
 
 - **`tests/test_usage_dashboard.py`** — ordinary unit tests over pure functions (JSONL parsing/aggregation, using `tmp_path` fixtures). Deterministic, always green.
 - **`tests/test_intent_routing.py`** — an *eval*, not a unit test. Each case is a real classification decision from a live `claude` CLI call (`model: haiku`, matching the shipped agent) on a prompt chosen to sit near a category boundary. A single case flipping between runs is expected model variance, not a regression — the test asserts an aggregate pass rate (`MIN_PASS` in that file) across the whole case set, not per-case. Only treat a case as actually broken if it fails consistently across reruns, or the failure reason itself is new.
+
+<!-- cairn:start -->
+## cairn (mandatory entrypoint)
+
+If the cairn plugin is installed and its `intent-analyzer` subagent is available, EVERY new user request MUST be routed through `intent-analyzer` first to classify and normalize it before any other action — no exceptions.
+
+If the cairn plugin is not installed, ask the user for approval to install it:
+  /plugin marketplace add jisundr/cairn
+  /plugin install cairn@cairn-plugins
+If approved, install it, tell the user a new Claude Code session is required
+before intent-analyzer becomes available, then proceed with this current
+request normally (without cairn). If declined, also proceed normally.
+<!-- cairn:end -->

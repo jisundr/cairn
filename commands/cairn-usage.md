@@ -1,11 +1,11 @@
 ---
-description: "Open a realtime local usage dashboard for this project — token/cost totals and a per-session table with the cairn version each session ran on."
+description: "Open a realtime local usage dashboard for this project — token/cost totals and a per-session table with the cairn version each session ran on. Requires /cairn-setup to have run first."
 argument-hint: "[stop]"
 ---
 
 ## Your task
 
-This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no dependencies) — it reads this project's session transcripts directly from `~/.claude/projects/`, so there's nothing to install or configure first.
+This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no dependencies) — it reads this project's session transcripts directly from `~/.claude/projects/`, so there's nothing to install or configure first. It does require the project to have run `/cairn-setup`, though — see step 1 below.
 
 **If `$ARGUMENTS` is `stop`:**
 
@@ -16,11 +16,15 @@ This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no
 
 **Otherwise (start, the default):**
 
-1. Check `.cairn/usage-dashboard.pid` — if it names a still-alive process, report the dashboard is already running (relay the URL you saved there) and stop. Don't launch a second instance.
-2. Run `python3 "$CLAUDE_PLUGIN_ROOT/scripts/usage_dashboard.py" "$(pwd)"` **in the background** (detached — this command must return promptly, not block on the server). It prints its URL on the first line of stdout ("cairn usage dashboard at http://...") — capture that and the PID.
-3. Create `.cairn/` in the project root if it doesn't exist, write the PID and URL to `.cairn/usage-dashboard.pid`.
-4. Ensure `.cairn/` is gitignored: if the project has a `.gitignore` and it doesn't already mention `.cairn/`, append it. If there's no `.gitignore` at all, leave it — don't create one just for this.
-5. Open the URL in the user's browser.
-6. Report the dashboard URL, and that `/cairn-usage stop` shuts it down.
+1. Check the project has run `/cairn-setup`: root `CLAUDE.md` must exist and contain the `<!-- cairn:start -->` marker.
+   - Not set up: refuse to start. Tell the user to run `/cairn-setup` first — the dashboard's version-per-session data only makes sense for a project that's opted in, and starting it in an unset-up project would create `.cairn/` with no version history behind it. Stop here.
+2. Check `.cairn/usage-dashboard.pid` — if it names a still-alive process, report the dashboard is already running (relay the URL you saved there) and stop. Don't launch a second instance.
+3. Run `python3 "$CLAUDE_PLUGIN_ROOT/scripts/usage_dashboard.py" "$(pwd)"` **in the background** (detached — this command must return promptly, not block on the server). It prints its URL on the first line of stdout ("cairn usage dashboard at http://...") — capture that and the PID.
+4. Create `.cairn/` in the project root if it doesn't exist, write the PID and URL to `.cairn/usage-dashboard.pid`.
+5. Ensure `.cairn/.gitignore` exists containing a single `*` — this makes the whole directory self-ignoring, so nothing under `.cairn/` needs the project's own root `.gitignore` touched at all.
+6. Open the URL in the user's browser.
+7. Report the dashboard URL, and that `/cairn-usage stop` shuts it down.
+
+`stop` never requires setup — it's cleanup, always allowed, even if `/cairn-teardown` ran since the dashboard was started.
 
 Sessions that ran before this feature existed won't have a version-log entry — the dashboard shows `unknown` for those rather than guessing.

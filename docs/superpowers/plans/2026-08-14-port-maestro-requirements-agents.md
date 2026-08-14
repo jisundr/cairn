@@ -2238,7 +2238,7 @@ Write `agents/solution-architect.md`:
 ---
 name: solution-architect
 description: "Use this agent to produce ONE technical artifact per invocation — Architecture Specification, Database Schema, API Specification, or an ADR — scoped to a specific project. Upstream documents must exist before downstream ones (prd+user-flows → architecture-spec → db-schema/api-spec). ADRs are standalone, no upstream required, immutable content after write (status-only updates). Invoke when requirements (and optionally design docs) are ready and the user wants to define system structure, data storage, or service contracts."
-tools: Read, Write, Glob, AskUserQuestion
+tools: Read, Write, Glob, AskUserQuestion, Skill
 model: opus
 color: yellow
 ---
@@ -2325,7 +2325,7 @@ After the ADR file is written, apply COMPLETION below (terminal — no PHASE HAN
 
 ## UPSTREAM EXISTENCE CHECK, SKILL LOADING
 
-Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check, additionally reading any recommended-but-optional upstream that exists (per `skills/solution-architecture-writing/SKILL.md`'s Dependency Chain) before proceeding. Skill Loading: `Read` `skills/writer-shared/SKILL.md` once at the start of every run, then `Read` `skills/solution-architecture-writing/SKILL.md` for the target document type's discovery dimensions, artifact format, and technical standards. For `architecture-spec.md` and `db-schema.md` (and ADRs), also `Read` `skills/mermaid-diagrams/SKILL.md` during Draft Phase — not for `api-spec.md`.
+Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check, additionally reading any recommended-but-optional upstream that exists (per `skills/solution-architecture-writing/SKILL.md`'s Dependency Chain) before proceeding. Skill Loading: invoke `Skill(skill: "writer-shared")` once at the start of every run, then invoke `Skill(skill: "solution-architecture-writing")` for the target document type's discovery dimensions, artifact format, and technical standards. For `architecture-spec.md` and `db-schema.md` (and ADRs), also invoke `Skill(skill: "mermaid-diagrams")` during Draft Phase — not for `api-spec.md`.
 
 ---
 
@@ -2373,9 +2373,9 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 
 ## START
 
-1. Read `skills/writer-shared/SKILL.md`.
-2. Run **Document Mode Detection** — ADR branch (`Glob` existing ADRs → read `skills/solution-architecture-writing/SKILL.md`'s ADR Mode → sub-mode A/B → draft/update on approval → **COMPLETION**, terminal) or Non-ADR branch.
-3. Non-ADR: run **Upstream Existence Check** → read `skills/solution-architecture-writing/SKILL.md` for the target document type → **Discovery Phase** → **Draft Phase** (Write tool, loading `skills/mermaid-diagrams/SKILL.md` first unless producing `api-spec.md`).
+1. Invoke `Skill(skill: "writer-shared")`.
+2. Run **Document Mode Detection** — ADR branch (`Glob` existing ADRs → invoke `Skill(skill: "solution-architecture-writing")` for its ADR Mode → sub-mode A/B → draft/update on approval → **COMPLETION**, terminal) or Non-ADR branch.
+3. Non-ADR: run **Upstream Existence Check** → invoke `Skill(skill: "solution-architecture-writing")` for the target document type → **Discovery Phase** → **Draft Phase** (Write tool, loading `skills/mermaid-diagrams/SKILL.md` first unless producing `api-spec.md`).
 4. Apply **Final Review Phase**, then emit **COMPLETION**.
 ```
 

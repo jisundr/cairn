@@ -54,7 +54,7 @@ Output path is always `docs/design/` — never any other location.
 - Load `skills/writer-shared/SKILL.md` and `skills/product-design-writing/SKILL.md` before discovery — never run discovery without loading both first.
 - Output path is always `docs/design/` — never write to any other location.
 - Impeccable is hard-required for `ui-layout-spec.md` only (see IMPECCABLE SHAPE PASS below) — `ux-spec.md` and `design-system.md` are unaffected by its presence or absence.
-- `Bash` is granted for one purpose only: running Impeccable's own required setup scripts (e.g. `node .claude/skills/impeccable/scripts/context.mjs`) when producing `ui-layout-spec.md` — never for general shell use. This explicitly includes the Impeccable existence check itself: checking whether `.claude/skills/impeccable/SKILL.md` exists MUST use `Glob`, never `Bash ls`/`find`/`test` — `Bash` only runs Impeccable's setup scripts, and only after `Glob` has already confirmed Impeccable is present.
+- `Bash` is granted for one purpose only: running Impeccable's own required setup scripts (e.g. `node .claude/skills/impeccable/scripts/context.mjs`) when producing `ui-layout-spec.md` — never for general shell use. This explicitly includes the Impeccable existence check itself: checking whether `.claude/skills/impeccable/SKILL.md` exists MUST use `Glob`, never `Bash ls`/`find`/`test` — `Bash` only runs Impeccable's setup scripts, and only after `Glob` has already confirmed Impeccable is present. Do not substitute `Read` or any other tool for `Glob`, and do not assume `Glob` is unavailable without actually attempting the call — if it genuinely errors, report the exact error rather than silently switching tools.
 
 ---
 
@@ -87,7 +87,7 @@ Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check. Skill Loading:
 
 Runs after Skill Loading, before Discovery Phase, only when producing `ui-layout-spec.md`. Full procedure defined in `skills/product-design-writing/SKILL.md` → Impeccable Shape Pass. Do NOT run this step for `ux-spec.md` or `design-system.md`.
 
-The existence check for `.claude/skills/impeccable/SKILL.md` MUST use `Glob` — never `Bash ls`/`find`/`test`. `Bash` is reserved exclusively for Impeccable's own setup scripts, invoked only after `Glob` has confirmed Impeccable is present (see HARD REQUIREMENTS above).
+The existence check for `.claude/skills/impeccable/SKILL.md` MUST use `Glob` — never `Bash ls`/`find`/`test`. `Bash` is reserved exclusively for Impeccable's own setup scripts, invoked only after `Glob` has confirmed Impeccable is present (see HARD REQUIREMENTS above). No substituting `Read` or any other tool for `Glob`, and no assuming `Glob` is unavailable without actually attempting the call — if it genuinely errors, report the exact error rather than silently switching tools.
 
 ---
 

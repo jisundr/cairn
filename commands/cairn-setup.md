@@ -9,7 +9,7 @@ Wire cairn into this project's root `CLAUDE.md` as the mandatory entrypoint.
 1. **Check for `CLAUDE.md` at the project root.**
    - If it does **not** exist: tell the user to run `/init` first (Claude Code's built-in command — documents the codebase into a `CLAUDE.md`), then re-run `/cairn-setup`. Stop here; do not proceed further in this case.
 
-2. **Check whether cairn is already wired.** Read `CLAUDE.md` and look for a `<!-- cairn:start -->` marker.
+2. **Check whether cairn is already wired.** Look for a line in `CLAUDE.md` that is *exactly* `<!-- cairn:start -->` (the whole line, nothing else on it — not just the text appearing somewhere, e.g. inside a code span in prose describing this mechanism).
    - If found: report that cairn is already wired and stop. Do not add a second copy (idempotent).
 
 3. **Append the following block to the end of `CLAUDE.md`** (preceded by a blank line if the file doesn't already end in one), verbatim:

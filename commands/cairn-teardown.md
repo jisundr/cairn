@@ -9,7 +9,7 @@ Undo what `/cairn-setup` did to this project's root `CLAUDE.md`.
 1. **Check for `CLAUDE.md` at the project root.**
    - If it does not exist: report there's nothing to remove and stop.
 
-2. **Look for the `<!-- cairn:start -->` ... `<!-- cairn:end -->` block.**
+2. **Look for the block delimited by a line that is *exactly* `<!-- cairn:start -->` and a line that is *exactly* `<!-- cairn:end -->`** (the whole line, nothing else on it — not just the text appearing somewhere, e.g. inside a code span in prose describing this mechanism).
    - If not found: report cairn isn't wired in this project and stop.
 
 3. **Remove the block**, including the markers themselves, and collapse any blank-line artifact left behind (don't leave two consecutive blank lines where the block used to be).

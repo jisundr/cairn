@@ -16,7 +16,7 @@ This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no
 
 **Otherwise (start, the default):**
 
-1. Check the project has run `/cairn-setup`: root `CLAUDE.md` must exist and contain the `<!-- cairn:start -->` marker.
+1. Check the project has run `/cairn-setup`: root `CLAUDE.md` must exist and contain a line that is *exactly* `<!-- cairn:start -->` (the whole line, nothing else on it — not just the text appearing somewhere, e.g. inside a code span in prose describing this mechanism).
    - Not set up: refuse to start. Tell the user to run `/cairn-setup` first — the dashboard's version-per-session data only makes sense for a project that's opted in, and starting it in an unset-up project would create `.cairn/` with no version history behind it. Stop here.
 2. Check `.cairn/usage-dashboard.pid` — if it names a still-alive process, report the dashboard is already running (relay the URL you saved there) and stop. Don't launch a second instance.
 3. Run `python3 "$CLAUDE_PLUGIN_ROOT/scripts/usage_dashboard.py" "$(pwd)"` **in the background** (detached — this command must return promptly, not block on the server). It prints its URL on the first line of stdout ("cairn usage dashboard at http://...") — capture that and the PID.

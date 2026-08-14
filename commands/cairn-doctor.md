@@ -11,7 +11,7 @@ Run these checks in order and report a summary at the end. None of them are gate
    - Fetched a newer version → report that, and note a new Claude Code session is required before it takes effect (plugins load at session start, not mid-session).
    - Command fails (e.g. `claude`/marketplace not reachable) → relay the error plainly, don't treat it as fatal to the rest of the checks.
 
-2. **CLAUDE.md entrypoint wiring.** If the project has a root `CLAUDE.md`, check for the `<!-- cairn:start -->` marker.
+2. **CLAUDE.md entrypoint wiring.** If the project has a root `CLAUDE.md`, check for a line that is *exactly* `<!-- cairn:start -->` (the whole line, nothing else on it — not just the text appearing somewhere, e.g. inside a code span in prose describing this mechanism).
    - Present → report wired.
    - Absent → report not wired. This is informational, not a problem — mention `/cairn-setup` if they want it, don't suggest anything's broken.
    - No `CLAUDE.md` at all → report not applicable.

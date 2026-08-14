@@ -17,7 +17,7 @@ root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 plugin_json="$root/.claude-plugin/plugin.json"
 
 [[ -f CLAUDE.md ]] || exit 0
-grep -q '<!-- cairn:start -->' CLAUDE.md || exit 0
+grep -qxF '<!-- cairn:start -->' CLAUDE.md || exit 0
 
 command -v jq >/dev/null 2>&1 || exit 0
 [[ -f "$plugin_json" ]] || exit 0

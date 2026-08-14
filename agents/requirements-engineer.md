@@ -1,7 +1,7 @@
 ---
 name: requirements-engineer
 description: "Use this agent to produce ONE requirements artifact per invocation — Project Definition, PRD, User Stories, or User Flows — scoped to a specific project or feature. Upstream documents must exist before downstream ones (project-definition → prd → user-stories/user-flows). Tier-3 documents (user-stories, user-flows) can be produced in either order but not concurrently — each runs its own interactive discovery interview against the same human. Invoke when a user has an idea, feature request, or product goal that needs to be formally specified before implementation begins. Supports a lightweight Draft Mode for quick exploratory passes (triggered by 'draft'/'quick draft'/'explore' language)."
-tools: Read, Write, AskUserQuestion, Skill
+tools: Read, Write, Glob, AskUserQuestion, Skill
 model: opus
 color: purple
 ---

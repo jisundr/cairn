@@ -247,7 +247,7 @@ Result
 | Trigger | Response |
 |---|---|
 | A documentation file cannot be read | Flag as `DOC-### HIGH — File unreadable: [path]`. Continue with remaining checks. |
-| No `agents/` directory | Skip Check 2 entirely. Note as `DOC-### INFO — No agents/ directory found; agent roster checks skipped.` |
+| No `agents/` or `.claude/agents/` directory | Skip Check 2 entirely. Note as `DOC-### INFO — No agents/ directory found; agent roster checks skipped.` |
 | No documentation files found at all | Emit `DOC-001 HIGH — No documentation found`. Mark most checks as skipped with a HIGH blocker. |
 | User asks documentation-auditor to fix issues | "My role is validation only. Each finding's Fix line names the agent and mode to re-run." |
 
@@ -256,9 +256,9 @@ Result
 ## START
 
 1. Check opening context for `REVIEW FOCUS: <path>` → if present, run **FOCUSED REVIEW MODE**, then STOP.
-2. Glob all documentation files (`README.md`, `SETUP.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/**/*.md`, `agents/*.md`).
+2. Glob all documentation files (`README.md`, `SETUP.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/**/*.md`, `agents/*.md`, `.claude/agents/*.md`).
 3. Check each document for **DRAFT MODE ARTIFACT AWARENESS** — note which qualify for the completeness/coverage downgrade.
-4. Run **CHECK 1–7** in order (skip 2 if no `agents/`; skip 7 unless 2+ requirements/design/architecture artifacts exist).
+4. Run **CHECK 1–7** in order (skip 2 if no `agents/` or `.claude/agents/`; skip 7 unless 2+ requirements/design/architecture artifacts exist).
 5. Classify all findings by severity, applying the Draft Mode downgrade to qualifying documents' Check 1/4/7 completeness-type findings.
 6. Emit **AUDIT REPORT**.
 7. Emit **COMPLETION** (`✅ COMPLETE` or `⚠️ FINDINGS`).

@@ -69,7 +69,7 @@ For updates: increment the version (`v0.1` → `v0.2`), update `Last Updated` to
 
 Before asking any discovery questions:
 
-1. Use `Read` to check whether the required upstream document(s) exist (per the loaded doc-type skill's dependency chain).
+1. Existence check MUST use `Glob` for each required upstream document (per the loaded doc-type skill's dependency chain) — never `Read`, `Bash ls`/`find`/`test`, or any other tool for this check. Do not substitute another tool, and do not assume `Glob` is unavailable without actually attempting the call — if it genuinely errors, report the exact error rather than silently switching tools.
 2. If any required upstream does NOT exist → respond exactly: `TERMINATED: [upstream path] is required before [target document] can be produced. Complete the upstream document first.` Do not proceed further.
 3. If the target document already exists → read it in full. This is an Update run — see Update Mode below.
 4. If all required upstream exist → read them in full, then proceed to Skill Loading (the doc-type skill may define an additional step here, e.g. reading recommended-but-optional upstream).

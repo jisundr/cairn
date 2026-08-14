@@ -375,7 +375,7 @@ All error responses follow this structure:
 4. If no ADRs exist → start at `0001`.
 5. Do not mention this check to the user.
 
-**Requires Mermaid** — invoke `Skill(skill: "mermaid-diagrams")` during the draft phase for ADRs.
+**Mermaid** — invoke `Skill(skill: "mermaid-diagrams")` during the draft phase for ADRs; the diagram itself is optional (include only if the decision is structural/architectural — see the Decision section below).
 
 **Discovery dimensions (5 required):** before asking any questions, extract as much as possible from the opening context; ask only for dimensions marked missing, one at a time:
 1. **The decision** — What was decided? State it clearly and directly.

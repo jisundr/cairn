@@ -41,7 +41,7 @@ cairn's design is the opposite: no fixed agent roster, self-contained agents (`i
         → user-stories.md (tier 3, requires prd.md)
         → user-flows.md  (tier 3, requires prd.md)
   ```
-  Tier 3 documents may be produced in parallel (two separate invocations) since they don't depend on each other.
+  Tier 3 documents (`user-stories.md`, `user-flows.md`) don't depend on each other, so either can be produced first — but not concurrently. Each runs a `AskUserQuestion`-driven discovery interview against the same human; two instances in parallel would mean two simultaneous interview threads competing for the same person's attention. Unlike maestro (which assumes independently-interviewable concurrent instances), cairn's port is strictly sequential — one artifact, one interview, start to finish, before the next.
 - **Upstream Existence Check** — refuse (`TERMINATED: ...`) if the required upstream doc is missing.
 - **One artifact per run** — hard rule, refuse multi-artifact requests.
 - **Discovery Phase discipline** — one question at a time via `AskUserQuestion`, suggestions labeled as examples never auto-accepted, no drafting during discovery, explicit "I have enough information to draft the [document type]" checkpoint.
@@ -54,7 +54,7 @@ cairn's design is the opposite: no fixed agent roster, self-contained agents (`i
 ```yaml
 ---
 name: requirements-engineer
-description: "Use this agent to produce ONE requirements artifact per invocation — Project Definition, PRD, User Stories, or User Flows — scoped to a specific project or feature. Upstream documents must exist before downstream ones (project-definition → prd → user-stories/user-flows). Multiple instances may run in parallel on different scopes at the same tier. Invoke when a user has an idea, feature request, or product goal that needs to be formally specified before implementation begins. Supports a lightweight Draft Mode for quick exploratory passes (triggered by 'draft'/'quick draft'/'explore' language) alongside the full formal discovery flow."
+description: "Use this agent to produce ONE requirements artifact per invocation — Project Definition, PRD, User Stories, or User Flows — scoped to a specific project or feature. Upstream documents must exist before downstream ones (project-definition → prd → user-stories/user-flows). Tier-3 documents (user-stories, user-flows) can be produced in either order but not concurrently — each runs its own interactive discovery interview against the same human. Invoke when a user has an idea, feature request, or product goal that needs to be formally specified before implementation begins. Supports a lightweight Draft Mode for quick exploratory passes (triggered by 'draft'/'quick draft'/'explore' language) alongside the full formal discovery flow."
 tools: Read, Write, Glob, AskUserQuestion
 model: opus
 color: purple
@@ -65,7 +65,7 @@ color: purple
 
 Body carries (trimmed per the table above, merged from maestro's agent file + the shared `writer-agent-guide` sections it actually uses):
 - SYSTEM ROLE — Requirements Engineer, requirements-only scope, no architecture/design/code
-- WORKFLOW INTENT — dependency tiers, parallel-safe tier 3, Formal/Draft/Update mode table
+- WORKFLOW INTENT — dependency tiers, tier-3 either-order-but-sequential note, Formal/Draft/Update mode table
 - HARD REQUIREMENTS — one artifact/run, upstream-must-exist, requirements-only, no partial drafts, no file writes without confirmation, testable acceptance criteria, load doc skill before discovery, flat output path only
 - DOCUMENT MODE DETECTION — identify target doc type from request; `AskUserQuestion` if ambiguous
 - DRAFT MODE trigger detection, minimal discovery, approach proposal, exploratory callout, draft-to-formal upgrade
@@ -89,7 +89,7 @@ Body carries (trimmed per the table above, merged from maestro's agent file + th
     Status  → ✅ COMPLETE
     Flags   → [Draft Mode — supersedes with a full formal run | upgraded from draft to formal | none]
   ```
-- EXIT & DERAILMENT HANDLING — the four generic rows (upstream missing, multi-artifact request, skip-discovery, session-abandoned) plus: architecture/design/code request → refuse, scope is requirements only; finalize-without-testable-criteria → ask one more question. ClickUp row dropped (no `project-manager`).
+- EXIT & DERAILMENT HANDLING — the four generic rows (upstream missing, multi-artifact request, skip-discovery, session-abandoned) plus: architecture/design/code request → refuse, scope is requirements only; finalize-without-testable-criteria → ask one more question. ClickUp row dropped (no `project-manager`). Multi-artifact-request row's wording changed: maestro's original suggests "launch separate instances" to parallelize — dropped per the sequential-only decision above; response becomes "This agent produces one requirements artifact per run. Complete this one, then invoke it again for the next."
 - START — numbered sequence mirroring the phases above, minus Feature Status Gate / Feature Scope Resolution / Competitive Input steps.
 
 ## Skill: `skills/requirements-writing/SKILL.md`

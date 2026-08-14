@@ -135,7 +135,7 @@ Instead, `product-designer` treats it the way `idea-explorer` treats `superpower
 ### `requirements-engineer`
 - Modes: Formal, Draft (3-question minimal discovery → 2-3 approaches → confirm → write, `**Draft**` callout, `v0.1-draft`, upgrade path), Update.
 - 4-doc dependency chain: `project-definition.md` → `prd.md` → `user-stories.md`/`user-flows.md` (tier 3, either order, sequential — not concurrent, since both run live interviews against the same human).
-- Upstream Existence Check (`TERMINATED:` if missing), one artifact per run, Discovery Phase discipline, Final Review Phase, Document Metadata block (`Derived From: User discovery interview`).
+- Upstream Existence Check (`TERMINATED:` if missing), one artifact per run, Discovery Phase discipline, Final Review Phase, Document Metadata block. **Correction from an earlier draft:** `Derived From` isn't uniformly "User discovery interview" — only `project-definition.md` (tier 1, genuinely no upstream) uses that. `prd.md`, `user-stories.md`, `user-flows.md` each cite their real upstream doc directly (`docs/requirements/project-definition.md`, `docs/requirements/prd.md`, `docs/requirements/prd.md`), matching how `product-designer`/`solution-architect`'s own inline templates already do it (see Doc templates below).
 
 ### `product-designer`
 - 3-doc dependency chain: `ux-spec.md` (requires prd+user-flows) → `ui-layout-spec.md` (requires ux-spec); `design-system.md` (requires prd only, independent branch).
@@ -228,6 +228,778 @@ Three writer agents now share the same underlying mechanics (discovery phase, dr
 - **`skills/mermaid-diagrams/SKILL.md`** — ported from `mermaid-diagram-guide` as-is (generic diagram-formatting rules, no cross-agent dependency). Loaded conditionally, per doc type, by `product-designer` and `solution-architect` — never by `requirements-engineer` (none of its 4 doc types use diagrams).
 
 Five files total (plus none for the two doc agents, which stay skill-free like their maestro originals). Splittable further later — nothing here locks in the grouping.
+
+## Doc templates (final, post-edit)
+
+Embedded here rather than left as a narrative edit list, to remove ambiguity during implementation — each is maestro's source content with the documented edits already applied. `## Metadata` blocks are shown per-doc-type as maestro's own `product-designer`/`solution-architect` templates already do it inline; for the requirements doc types (which apply the metadata block via the shared `writer-agent-guide` template rather than inline), the same shape is shown here explicitly, with `Derived From` corrected per the note above.
+
+### `project-definition.md` (requirements-engineer, tier 1)
+
+Scope & Boundaries section removed (Feature Status Gate dependency, dropped). `Derived From: User discovery interview` (no upstream).
+
+```markdown
+# Project Definition: [Project Name]
+
+## Metadata
+- Project Definition Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: User discovery interview
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## Overview
+[What this project is and why it exists — 1-3 sentences]
+
+## Goals
+- [Goal 1]
+- [Goal 2]
+
+## Non-Goals
+- [Explicit exclusion 1]
+- [Explicit exclusion 2]
+
+## Stakeholders
+| Stakeholder | Role | Interest |
+|---|---|---|
+
+## Constraints
+- [Known constraint that bounds the solution]
+
+## Assumptions & Risks
+- [Assumption or risk]
+
+## Open Questions
+- [Unresolved item requiring a decision]
+```
+
+### `prd.md` (requirements-engineer, tier 2)
+
+Scope & Boundaries section removed. `Derived From: docs/requirements/project-definition.md`.
+
+```markdown
+# Product Requirements Document: [Feature / Project Name]
+
+## Metadata
+- PRD Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/requirements/project-definition.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## Overview
+[One paragraph: what, who, why]
+
+## Personas
+| Persona | Description | Primary Goal |
+|---|---|---|
+
+## Functional Requirements
+| ID     | Requirement   | Priority              |
+|--------|---------------|------------------------|
+| FR-001 | [Requirement] | Must / Should / Could |
+
+## Non-Functional Requirements
+| ID      | Category                                       | Requirement   |
+|---------|-------------------------------------------------|---------------|
+| NFR-001 | [Performance / Security / Accessibility / ...] | [Requirement] |
+
+## Out of Scope
+- [Explicit exclusion]
+
+## Open Questions
+| # | Question | Owner | Status |
+|---|----------|-------|--------|
+```
+
+### `user-stories.md` (requirements-engineer, tier 3)
+
+No edits — used as-is. `Derived From: docs/requirements/prd.md`.
+
+```markdown
+# User Stories: [Feature / Project Name]
+
+## Metadata
+- User Stories Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/requirements/prd.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## [Story Title]
+
+**User Story**
+As a [persona], I want [capability], so that [benefit].
+
+**Acceptance Criteria**
+- [ ] [Testable criterion — specific, observable, binary pass/fail]
+- [ ] [Testable criterion]
+- [ ] [Testable criterion]
+
+**Edge Cases**
+- [Scenario]: [Expected behavior]
+
+---
+```
+
+### `user-flows.md` (requirements-engineer, tier 3)
+
+No edits — used as-is. `Derived From: docs/requirements/prd.md`.
+
+```markdown
+# User Flows: [Feature / Project Name]
+
+## Metadata
+- User Flows Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/requirements/prd.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## [Flow Name]
+
+**Actor:** [persona]
+**Trigger:** [what initiates this flow]
+**Goal:** [what the actor is trying to accomplish]
+
+**Happy Path**
+1. [Step 1]
+2. [Step 2]
+3. ...
+4. **End state:** [what is true when the flow completes successfully]
+
+**Alternate Paths**
+- [Condition]: [alternate steps or branch]
+
+**Error States**
+- [Error condition]: [expected system behavior]
+
+---
+```
+
+### `ux-spec.md` (product-designer, tier 1)
+
+Stale "Scope or Feature Coverage" writing-standard note dropped. Mermaid required (Interaction Flows).
+
+```markdown
+# UX Specification: [Project Name]
+
+## Metadata
+- UX Specification Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/requirements/prd.md, docs/requirements/user-flows.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## User Personas
+| Persona | Description | Primary Goal |
+|---------|-------------|--------------|
+
+---
+
+## User Journey
+[Narrative description of the core end-to-end experience for each persona]
+
+---
+
+## Interaction Flows
+[One Mermaid flowchart per core user journey]
+
+---
+
+## Navigation Model
+| From Screen | Action | Destination | Condition |
+|-------------|--------|-------------|-----------|
+
+---
+
+## Screen Specifications
+
+### [Screen Name]
+**Purpose:** [What this screen exists to accomplish]
+**Accessible Roles:** [Which personas or roles can access this screen]
+
+**Primary Actions:**
+| Action | Available To | System Response |
+|--------|-------------|-----------------|
+
+**Permission Rules:**
+| Element / Action | Role | Visibility |
+|-----------------|------|------------|
+
+**States:**
+- **Loading:** [Behavior when content is loading]
+- **Empty:** [Behavior when there is no data to display]
+- **Error:** [Behavior when an error occurs]
+- **Success:** [Feedback after a successful action]
+
+---
+
+## Assumptions & Open Questions
+**Assumptions:**
+- [Each assumption made during discovery]
+
+**Open Questions:**
+- [Unresolved items, if any — omit section if none]
+```
+
+### `ui-layout-spec.md` (product-designer, tier 2)
+
+Stale writing-standard note dropped. No Mermaid (ASCII/text layout diagrams instead). Requires Impeccable pre-fill per above.
+
+```markdown
+# UI Layout Specification: [Project Name]
+
+## Metadata
+- UI Layout Specification Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/design/ux-spec.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## Global Regions
+| Region ID | Region Name | Scope | Description |
+|-----------|-------------|-------|-------------|
+| REG-1 | [e.g., Top Navigation] | Global | ... |
+
+---
+
+## Screen Layouts
+
+### [Screen Name]
+**Layout Pattern:** [e.g., List + Detail, Dashboard, Full-Page Form, Wizard]
+
+**Layout Structure:**
+```
+[ASCII or text representation of the layout]
+Header
+Content Area
+  └ [Component or sub-region]
+Footer
+```
+
+**Component Hierarchy:**
+```
+[Screen Name]
+ ├── [Region / Component]
+ │    └── [Sub-component]
+ └── [Region / Component]
+```
+
+**Responsive Behavior:**
+| Breakpoint | Transformation |
+|------------|----------------|
+| Mobile | ... |
+| Tablet | ... |
+| Desktop | ... |
+
+---
+
+## Component Composition Summary
+| Screen | Region | Component | Notes |
+|--------|--------|-----------|-------|
+
+---
+
+## Assumptions & Open Questions
+**Assumptions:**
+- [Each structural assumption made during discovery]
+
+**Open Questions:**
+- [Unresolved structural items, if any — omit section if none]
+```
+
+### `design-system.md` (product-designer, tier 3, independent branch)
+
+No edits — used as-is (never carried the stale note). No Mermaid.
+
+```markdown
+# Design System: [Project Name]
+
+## Metadata
+- Design System Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/requirements/prd.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## Brand Foundation
+### Brand Personality
+[Short description of personality and tone]
+
+### Design Principles
+1. [Principle]
+2. [Principle]
+3. [Principle]
+
+---
+
+## Colors
+### Core Palette
+| Token | Value | Usage |
+|-------|-------|-------|
+| color-primary | #... | Primary actions, key UI elements |
+| color-secondary | #... | Supporting accents |
+| color-background | #... | Page background |
+| color-surface | #... | Card and panel backgrounds |
+| color-text-primary | #... | Primary text |
+| color-text-secondary | #... | Secondary / muted text |
+
+### Semantic Colors
+| Token | Value | Usage |
+|-------|-------|-------|
+| color-success | #... | Positive outcomes |
+| color-warning | #... | Caution states |
+| color-error | #... | Error states |
+| color-info | #... | Informational states |
+
+### Dark Mode Mapping
+[Either map light tokens to dark equivalents, or state: "Dark mode is not in scope for this project."]
+
+---
+
+## Typography
+### Font Families
+- **Primary:** [Font name] — headings and UI labels
+- **Secondary:** [Font name] — body text (or "same as primary")
+- **Monospace:** [Font name] — code or data (if applicable)
+
+### Type Scale
+| Style | Size | Weight | Line Height | Usage |
+|-------|------|--------|-------------|-------|
+| Heading 1 | 32px / 2rem | 700 | 1.25 | Page titles |
+| Heading 2 | 24px / 1.5rem | 600 | 1.3 | Section titles |
+| Heading 3 | 20px / 1.25rem | 600 | 1.4 | Subsection titles |
+| Body Large | 18px / 1.125rem | 400 | 1.6 | Lead text |
+| Body | 16px / 1rem | 400 | 1.5 | Default body text |
+| Body Small | 14px / 0.875rem | 400 | 1.5 | Supporting text |
+| Caption | 12px / 0.75rem | 400 | 1.4 | Labels, metadata |
+
+---
+
+## Spacing
+### Base Unit
+**Base unit:** [e.g., 4px or 8px]
+
+### Spacing Scale
+| Token | Value | Usage |
+|-------|-------|-------|
+| space-1 | [base × 1] | Tight inline spacing |
+| space-2 | [base × 2] | Default inline spacing |
+| space-3 | [base × 3] | Component internal padding |
+| space-4 | [base × 4] | Section spacing |
+| space-6 | [base × 6] | Large section spacing |
+| space-8 | [base × 8] | Page-level margins |
+
+### Border Radius
+| Token | Value | Usage |
+|-------|-------|-------|
+| radius-none | 0 | Square elements |
+| radius-sm | [value] | Subtle rounding |
+| radius-md | [value] | Default UI components |
+| radius-lg | [value] | Cards and panels |
+| radius-full | 9999px | Pills and avatars |
+
+---
+
+## Components
+For each component: define variants, visual rules, and token references. Do NOT define interaction behavior.
+
+### Buttons
+| Variant | Background | Text Color | Border | Padding |
+|---------|-----------|------------|--------|---------|
+| Primary | color-primary | color-text-inverse | none | space-3 space-4 |
+| Secondary | transparent | color-primary | 1px color-primary | space-3 space-4 |
+| Destructive | color-error | color-text-inverse | none | space-3 space-4 |
+| Ghost | transparent | color-text-primary | none | space-3 space-4 |
+
+### Inputs
+[Define border, background, focus ring, placeholder color using tokens]
+
+### Cards
+[Define background, border, shadow, radius, padding using tokens]
+
+### Tables
+[Define header background, row dividers, row hover state using tokens]
+
+### Pagination
+[Define active page indicator, inactive page color, spacing]
+
+### Interaction Visual States
+| State | Visual Rule |
+|-------|-------------|
+| Hover | [e.g., opacity 0.9 or lighter background] |
+| Focus | [e.g., 2px outline using color-primary offset 2px] |
+| Active | [e.g., scale 0.98 or darker background] |
+| Disabled | [e.g., opacity 0.4, cursor not-allowed] |
+| Loading | [e.g., spinner overlay, reduced opacity] |
+| Error | [e.g., border color-error, error message in color-error] |
+
+---
+
+## Accessibility Standards
+- **WCAG Level:** [AA / AAA]
+- **Minimum contrast ratio (text):** 4.5:1 (normal text), 3:1 (large text)
+- **Minimum touch target size:** 44×44px
+- **Focus ring:** [Describe focus ring appearance]
+- **Text scaling:** Layouts must remain functional up to 200% browser zoom
+
+---
+
+## Assumptions & Open Questions
+**Assumptions:**
+- [Each assumption made during discovery]
+
+**Open Questions:**
+- [Unresolved visual items, if any — omit section if none]
+```
+
+### `architecture-spec.md` (solution-architect, tier 1)
+
+Stale writing-standard note dropped. Mermaid required (3 diagram sections).
+
+```markdown
+# Architecture Specification: [Project Name]
+
+## Metadata
+- Architecture Specification Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/requirements/prd.md, docs/requirements/user-flows.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## System Overview
+[1-3 paragraph description of the system: what it does, who uses it, and the key architectural approach]
+
+---
+
+## Architecture Diagram
+[Mermaid C4 context or component diagram showing system boundaries and major components]
+
+---
+
+## Components
+| ID | Component | Responsibility | Technology |
+|----|-----------|---------------|------------|
+| C-01 | [Name] | [What it does] | [Stack/runtime] |
+
+---
+
+## Component Interactions
+[Mermaid sequence or flowchart diagram showing key interaction patterns between components]
+
+| From | To | Protocol | Description |
+|------|----|----------|-------------|
+
+---
+
+## Data Stores
+| ID | Store | Type | Purpose | Component Owner |
+|----|-------|------|---------|-----------------|
+| DS-01 | [Name] | [PostgreSQL / Redis / S3 / etc.] | [What is stored here] | [Which component owns it] |
+
+---
+
+## External Integrations
+| ID | Integration | Direction | Purpose | Auth Method |
+|----|-------------|-----------|---------|-------------|
+| EXT-01 | [Service name] | Inbound / Outbound / Both | [Why this integration exists] | [How auth works] |
+
+---
+
+## Non-Functional Requirements
+| ID | Category | Requirement | Design Decision |
+|----|----------|-------------|-----------------|
+| NFR-01 | [Performance / Security / Availability / Scalability] | [Stated requirement] | [How the architecture addresses it] |
+
+---
+
+## Deployment Model
+[Description of the deployment topology — cloud provider, containerization, CI/CD, environments]
+
+[Mermaid deployment diagram if applicable]
+
+---
+
+## Security Considerations
+- [Authentication and authorization approach]
+- [Data protection at rest and in transit]
+- [Network boundary controls]
+- [Secrets management]
+
+---
+
+## Technical Risks
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+
+---
+
+## Assumptions & Open Questions
+**Assumptions:**
+- [Each assumption made during discovery]
+
+**Open Questions:**
+- [Unresolved technical items, if any — omit section if none]
+```
+
+### `db-schema.md` (solution-architect, tier 2a)
+
+Stale writing-standard note dropped. Mermaid required (ER diagram). `db-standards-guide` applied while drafting (merged into `skills/solution-architecture-writing/SKILL.md`).
+
+```markdown
+# Database Schema: [Project Name]
+
+## Metadata
+- Database Schema Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/architecture/architecture-spec.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## Overview
+[Brief description of the data model — number of entities, key relationships, storage strategy]
+
+---
+
+## Entity Relationship Diagram
+[Mermaid ER diagram showing all tables and their relationships]
+
+---
+
+## Tables
+
+For each table:
+
+### `[table_name]`
+**Purpose:** [What this table represents]
+
+```sql
+CREATE TABLE [table_name] (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    -- [columns with types, constraints, defaults]
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**Columns:**
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+
+**Indexes:**
+```sql
+CREATE INDEX CONCURRENTLY idx_[table]_[columns] ON [table]([columns]);
+```
+
+**Constraints:**
+- [List all constraints — FK, UNIQUE, CHECK — with ON DELETE behavior for FKs]
+
+---
+
+## Migrations
+| # | Description | Reversible | Notes |
+|---|-------------|-----------|-------|
+| 001 | Initial schema — create [tables] | Yes | — |
+
+---
+
+## Assumptions & Open Questions
+**Assumptions:**
+- [Each schema assumption made during discovery]
+
+**Open Questions:**
+- [Unresolved schema items, if any — omit section if none]
+```
+
+### `api-spec.md` (solution-architect, tier 2b)
+
+Stale writing-standard note dropped. No Mermaid (verified — no diagram references anywhere in this template). `api-standards-guide` applied while drafting.
+
+```markdown
+# API Specification: [Project Name]
+
+## Metadata
+- API Specification Version: v0.1
+- Last Updated: YYYY-MM-DD
+- Derived From: docs/architecture/architecture-spec.md
+- Author:
+  - AI Tool: Claude Code
+  - LLM Model: <exact_model_name>
+- Reviewed By:
+
+---
+
+## Overview
+[Brief description of the API — base URL, version, authentication method, primary consumers]
+
+**Base URL:** `https://api.[project].com/v1`
+**Authentication:** [JWT Bearer / OAuth 2.0 / API Key — describe scheme]
+**Format:** JSON (`Content-Type: application/json`)
+
+---
+
+## Authentication
+[Description of the authentication flow and token lifecycle]
+
+---
+
+## Endpoints
+
+For each resource group:
+
+### [Resource Group] (e.g., Users, Orders)
+
+#### `GET /[resources]`
+**Summary:** [One-line description]
+**Auth required:** Yes / No
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+
+**Response `200 OK`:**
+```json
+{
+  "data": [...],
+  "pagination": { "nextCursor": "...", "pageSize": 20, "hasMore": true }
+}
+```
+
+#### `POST /[resources]`
+**Summary:** [One-line description]
+**Auth required:** Yes / No
+
+**Request Body:**
+```json
+{
+  "field": "value"
+}
+```
+
+**Response `201 Created`:**
+```json
+{
+  "id": "...",
+  "field": "value",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | VALIDATION_FAILED | [When this occurs] |
+| 401 | UNAUTHORIZED | [When this occurs] |
+
+---
+
+## Error Format
+All error responses follow this structure:
+
+```json
+{
+  "code": "ERROR_CODE",
+  "message": "Human-readable description",
+  "details": [
+    { "field": "fieldName", "message": "Validation message" }
+  ]
+}
+```
+
+---
+
+## Versioning
+- **Current version:** v1
+- **Strategy:** URL-based versioning (`/v1/`, `/v2/`)
+- **Breaking change policy:** See api-standards-guide content (merged into `skills/solution-architecture-writing/SKILL.md`)
+
+---
+
+## Assumptions & Open Questions
+**Assumptions:**
+- [Each API assumption made during discovery]
+
+**Open Questions:**
+- [Unresolved API items, if any — omit section if none]
+```
+
+### `docs/adr/ADR-NNNN-<kebab-title>.md` (solution-architect, standalone)
+
+No edits — used as-is. No `## Metadata` block (ADRs never had one in maestro's own template — Status/Date substitute). Mermaid loaded per `adr-guide`'s own explicit instruction.
+
+```markdown
+# ADR-NNNN: [Decision Title — concise, imperative, e.g. "Use X as the Y"]
+
+## Status
+Proposed
+
+## Date
+YYYY-MM-DD
+
+## Context
+[What situation, problem, or constraint drove this decision?]
+
+## Decision
+[What was decided? State it clearly and directly.]
+
+## Alternatives Considered
+[Bullet list of alternatives and why each was not chosen]
+
+## Rationale
+[Why was this decision made? Connect the context to the decision.]
+
+## Consequences
+### Positive
+[Bullet list of benefits]
+
+### Negative / Trade-offs
+[Bullet list of downsides, risks, or constraints introduced]
+```
+
+Status-update format (Sub-mode B, only the `## Status` field changes, body content immutable):
+
+```markdown
+## Status
+Accepted
+
+**Status updated:** YYYY-MM-DD — [reason or note explaining the change]
+```
 
 ## End-to-end sequence (documented order, not a `Workflow` script)
 

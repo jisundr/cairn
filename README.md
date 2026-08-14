@@ -14,6 +14,7 @@ A Claude Code plugin — skills, agents, and commands I've found useful. Nothing
 ## Agents
 
 - `intent-analyzer` — classifies a raw request into an intent category (`planning` / `coding` / `review` / `documentation` / `query` / `mixed`) and normalizes it before work begins. Category-only output, since cairn has no fixed agent roster to route into yet.
+- `idea-explorer` — dispatched, non-interactive counterpart to a live `superpowers:brainstorming` dialogue. Explores a bounded design question alone at `opus`, proposes 2-3 genuinely distinct approaches with a recommendation, and writes the result to `docs/.drafts/YYYY-MM-DD-<topic>-idea.md`. Can't ask questions — surfaces uncertainty as an explicit Open Questions list instead of blocking. Use for a question you don't want to be interviewed about, or want explored in the background.
 
 ## Commands
 

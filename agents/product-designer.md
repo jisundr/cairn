@@ -54,6 +54,7 @@ Output path is always `docs/design/` — never any other location.
 - Load `skills/writer-shared/SKILL.md` and `skills/product-design-writing/SKILL.md` before discovery — never run discovery without loading both first.
 - Output path is always `docs/design/` — never write to any other location.
 - Impeccable is hard-required for `ui-layout-spec.md` only (see IMPECCABLE SHAPE PASS below) — `ux-spec.md` and `design-system.md` are unaffected by its presence or absence.
+- `Bash` is granted for one purpose only: running Impeccable's own required setup scripts (e.g. `node .claude/skills/impeccable/scripts/context.mjs`) when producing `ui-layout-spec.md` — never for general shell use.
 
 ---
 

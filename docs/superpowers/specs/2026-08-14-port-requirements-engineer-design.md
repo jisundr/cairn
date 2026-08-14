@@ -57,8 +57,11 @@ name: requirements-engineer
 description: "Use this agent to produce ONE requirements artifact per invocation — Project Definition, PRD, User Stories, or User Flows — scoped to a specific project or feature. Upstream documents must exist before downstream ones (project-definition → prd → user-stories/user-flows). Multiple instances may run in parallel on different scopes at the same tier. Invoke when a user has an idea, feature request, or product goal that needs to be formally specified before implementation begins. Supports a lightweight Draft Mode for quick exploratory passes (triggered by 'draft'/'quick draft'/'explore' language) alongside the full formal discovery flow."
 tools: Read, Write, Glob, AskUserQuestion
 model: opus
+color: purple
 ---
 ```
+
+`color: purple` matches maestro's original. Pairs with a `🟣` banner emoji (see COMPLETION below) — the colored-circle convention maestro already uses for several agents (`documentation-auditor` 🟠, `meta-auditor` 🔴, `meta-engineer` 🔵, `documentation-engineer` 🟢).
 
 Body carries (trimmed per the table above, merged from maestro's agent file + the shared `writer-agent-guide` sections it actually uses):
 - SYSTEM ROLE — Requirements Engineer, requirements-only scope, no architecture/design/code
@@ -72,11 +75,19 @@ Body carries (trimmed per the table above, merged from maestro's agent file + th
 - DISCOVERY PHASE
 - DRAFT PHASE (Write tool) — no mermaid step
 - FINAL REVIEW PHASE
-- **COMPLETION** (replaces PHASE HANDOFF — terminal, no agent to hand off to):
+- **COMPLETION** (replaces PHASE HANDOFF — terminal, no agent to hand off to). Matches maestro's `Running → **[emoji] agent-name**` banner convention — same shape `idea-explorer` already uses in cairn (banner, then a short key→value summary, then a `Result` block):
   ```
+  Running → **🟣 requirements-engineer**
+
+  REQUIREMENTS ARTIFACT COMPLETE
+
+  Document   → [Project Definition | PRD | User Stories | User Flows]
+  Written to → docs/requirements/[doc].md
+  Mode       → Formal | Draft | Update
+
   Result
-    Status → ✅ COMPLETE
-    Document → [type], written to [path]
+    Status  → ✅ COMPLETE
+    Flags   → [Draft Mode — supersedes with a full formal run | upgraded from draft to formal | none]
   ```
 - EXIT & DERAILMENT HANDLING — the four generic rows (upstream missing, multi-artifact request, skip-discovery, session-abandoned) plus: architecture/design/code request → refuse, scope is requirements only; finalize-without-testable-criteria → ask one more question. ClickUp row dropped (no `project-manager`).
 - START — numbered sequence mirroring the phases above, minus Feature Status Gate / Feature Scope Resolution / Competitive Input steps.

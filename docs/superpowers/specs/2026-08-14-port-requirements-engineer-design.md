@@ -69,10 +69,17 @@ cairn's design is the opposite: no fixed agent roster, self-contained agents (`i
 
 `impeccable` is not a maestro-authored skill — it's a vendored third-party tool (51,295 lines: compiled CLI, scripts, config), a separate "design guidance system for AI coding agents" that maestro commits into its own repo. Vendoring it into cairn is a materially different decision than porting an agent definition (licensing, updates, ownership of someone else's code) and is explicitly out of scope for this port.
 
-Instead, `product-designer` treats it the way `idea-explorer` treats `superpowers`: **hard-required, never reimplemented, abort rather than silently degrade** — but scoped to just the one doc type that needs it. Maestro's own template already excludes Impeccable from UX Specification and Design System (`Do NOT run this step for UX Specification or Design System artifacts`), so the hard-requirement is scoped the same way:
+Instead, `product-designer` treats it the way `idea-explorer` treats `superpowers`: **hard-required, never reimplemented, abort rather than silently degrade** — but scoped to just the one doc type that needs it. Maestro's own template already excludes Impeccable from UX Specification and Design System (`Do NOT run this step for UX Specification or Design System artifacts`), so the hard-requirement is scoped the same way.
 
-- Producing `ui-layout-spec.md`: check for `.claude/skills/impeccable` (via `Glob`). If present, invoke it. If absent, `ABORT` **that run only** — "Impeccable is required for UI Layout Specification and isn't vendored in this project. Vendor it (see impeccable's own setup) and re-run." UX Specification and Design System runs are entirely unaffected by Impeccable's presence or absence.
-- **Open question flagged for implementation, not resolved here:** maestro's own `product-designer` invokes Impeccable via a `/impeccable <command>` **slash command** (through an orchestrator-resume handoff pattern maestro built because its subagents can't call the `Skill` tool directly). cairn's `idea-explorer` precedent invokes its hard dependency directly via `Skill(skill: "superpowers:brainstorming")` — a real tool call, not a slash command, and this already works in cairn's actual runtime. Whether Impeccable exposes an equivalent `Skill`-tool-callable interface (vs. only ever being a slash command meant for a human or top-level thread) needs to be verified empirically against a real vendored copy before this piece is implemented — do not assume either mechanism without checking.
+**Verified against the real vendored skill** (`~/Projects/maestro/.claude/skills/impeccable/SKILL.md`), not assumed:
+
+- **Invocation mechanism resolved:** `impeccable/SKILL.md` carries `user-invocable: true` frontmatter — it IS a genuine, `Skill`-tool-callable skill, same mechanism `idea-explorer` already uses for `superpowers` (`Skill(skill: "impeccable", args: "shape ...")`), not a slash-command-only interface. The earlier open question is resolved.
+- **Needs `Bash`.** Its frontmatter (`allowed-tools: Bash(npx impeccable *), Bash(node .claude/skills/impeccable/scripts/*)`) and its own mandatory Setup steps ("You MUST run `node .claude/skills/impeccable/scripts/context.mjs`...") mean the invoking agent needs `Bash` — `Skill` doesn't sandbox its own tool grants; the invoking agent's own tool list is what actually executes. `product-designer`'s tools now include `Bash`, scoped to this one purpose.
+- **Stacked-interview risk found and designed around:** the specific sub-command `/impeccable shape` is itself a full multi-round `AskUserQuestion` discovery interview ("Design planning only... STOP and call the AskUserQuestion tool"), covering purpose/audience/content/design-direction/scope — substantially overlapping `ui-layout-spec-guide`'s own discovery dimensions. It also expects its own `PRODUCT.md` context file (unrelated to `docs/requirements/prd.md`); if absent, `shape` is one of the commands that diverts into impeccable's own from-scratch product-definition interview first. Naively invoking it in full would stack up to three interviews for one artifact.
+
+**Resolved design: pre-fill only, not a second interview.** `product-designer` invokes `Skill(skill: "impeccable", args: "shape [ui-layout-spec scope]")` once, but treats its design-brief output purely as **pre-filled input** to `product-designer`'s own Discovery Phase — same treatment as Reference Artifact Intake's pre-fills (propose the pre-filled answer per dimension, ask the user to confirm or correct, never assume silently). It does not run as a second freestanding interview layered on top. The one-time `PRODUCT.md` bootstrap cost (if impeccable has never run in this project before) is real and is documented as an expected first-run cost, not hidden.
+
+- Producing `ui-layout-spec.md`: check for `.claude/skills/impeccable` (via `Glob`). If present, invoke `shape` for pre-fill per above. If absent, `ABORT` **that run only** — "Impeccable is required for UI Layout Specification and isn't vendored in this project. Vendor it (see impeccable's own setup) and re-run." UX Specification and Design System runs are entirely unaffected by Impeccable's presence or absence.
 
 ### From `solution-architect`
 
@@ -155,13 +162,13 @@ Banner: `Running → **🟣 requirements-engineer**`. Loads `skills/writer-share
 ```yaml
 ---
 name: product-designer
-description: "Use this agent to produce ONE design artifact per invocation — UX Specification, UI Layout Specification, or Design System — scoped to a specific project. Upstream documents must exist before downstream ones (prd+user-flows → ux-spec → ui-layout-spec; prd → design-system, independent branch). UI Layout Specification requires Impeccable to be vendored in the project (.claude/skills/impeccable) — aborts that run if absent. Invoke when requirements are documented and the user wants to define user interaction and interface structure."
-tools: Read, Write, Glob, AskUserQuestion, WebFetch
+description: "Use this agent to produce ONE design artifact per invocation — UX Specification, UI Layout Specification, or Design System — scoped to a specific project. Upstream documents must exist before downstream ones (prd+user-flows → ux-spec → ui-layout-spec; prd → design-system, independent branch). UI Layout Specification requires Impeccable to be vendored in the project (.claude/skills/impeccable) — aborts that run if absent; invokes it once for pre-fill input into its own discovery, not as a second interview. Invoke when requirements are documented and the user wants to define user interaction and interface structure."
+tools: Read, Write, Glob, AskUserQuestion, WebFetch, Bash
 model: opus
 color: pink
 ---
 ```
-Banner: `Running → **🎨 product-designer**` (no standard "pink circle" emoji exists; picked a thematic icon, same reasoning maestro itself used for e.g. `harness-engineer`'s 🧩). Loads `skills/writer-shared/SKILL.md` + `skills/product-design-writing/SKILL.md`.
+`Bash` is scoped to one purpose: running Impeccable's own required setup scripts (`node .claude/skills/impeccable/scripts/context.mjs` etc.) when producing `ui-layout-spec.md` — Impeccable's `allowed-tools` frontmatter requires it, and `Skill` invocation doesn't grant tools the invoking agent doesn't already have. Banner: `Running → **🎨 product-designer**` (no standard "pink circle" emoji exists; picked a thematic icon, same reasoning maestro itself used for e.g. `harness-engineer`'s 🧩). Loads `skills/writer-shared/SKILL.md` + `skills/product-design-writing/SKILL.md`.
 
 ### `agents/solution-architect.md`
 ```yaml
@@ -251,11 +258,11 @@ claude -p "Produce a project definition for a simple todo app" --plugin-dir /pat
 ```
 
 - **`requirements-engineer`:** tier-1 doc with no upstream (proceeds), tier-2/3 doc with no upstream (`TERMINATED`), Draft Mode trigger. Inspect `docs/requirements/*.md`.
-- **`product-designer`:** `ux-spec.md` with `prd.md`+`user-flows.md` present; `ui-layout-spec.md` with `.claude/skills/impeccable` absent (confirm scoped `ABORT`, not a full-agent failure — `design-system.md` should still work in the same project); Reference Artifact Intake with a local file path.
+- **`product-designer`:** `ux-spec.md` with `prd.md`+`user-flows.md` present; `ui-layout-spec.md` with `.claude/skills/impeccable` absent (confirm scoped `ABORT`, not a full-agent failure — `design-system.md` should still work in the same project); Reference Artifact Intake with a local file path; `ui-layout-spec.md` with impeccable present (confirm `shape`'s output pre-fills discovery dimensions rather than running as a second full interview — the specific regression to watch for).
 - **`solution-architect`:** `architecture-spec.md` with upstream present; ADR Mode new-decision flow (confirm numbering starts at `0001` in an empty `docs/adr/`); status-update flow on an existing ADR (confirm content is untouched, only `## Status` changes).
 - **`documentation-auditor`:** PRD with an untraced `FR-001` → confirm `HIGH` Check 7a finding; stale README referencing a nonexistent file → confirm Check 3 finding; run after `solution-architect`/`product-designer` produce docs to confirm Checks 7c-7g go live (no longer permanently dormant).
 - **`documentation-engineer`:** Create Mode on a scratch project with no README; Update Mode on an existing README with one stale section (confirm targeted `Edit`, not full rewrite, absent explicit confirmation).
 
 ## Open questions
 
-- **Impeccable invocation mechanism** — verify empirically (against a real vendored copy) whether it's callable via the `Skill` tool (like `superpowers`) or only via a slash command meant for a human/top-level thread, before implementing the Impeccable Shape Pass step. This is the one piece of this spec that couldn't be resolved from reading maestro's source alone.
+None outstanding. The one open item from the previous draft — Impeccable's invocation mechanism — was verified against the real vendored skill (`~/Projects/maestro/.claude/skills/impeccable/SKILL.md`): it's `Skill`-tool-callable (`user-invocable: true`), requires `Bash` in the invoking agent's tools, and its `shape` sub-command runs its own discovery interview — resolved as a pre-fill-only integration (see Impeccable section above), not a second freestanding interview.

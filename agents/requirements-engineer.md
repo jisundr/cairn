@@ -1,7 +1,7 @@
 ---
 name: requirements-engineer
 description: "Use this agent to produce ONE requirements artifact per invocation — Project Definition, PRD, User Stories, or User Flows — scoped to a specific project or feature. Upstream documents must exist before downstream ones (project-definition → prd → user-stories/user-flows). Tier-3 documents (user-stories, user-flows) can be produced in either order but not concurrently — each runs its own interactive discovery interview against the same human. Invoke when a user has an idea, feature request, or product goal that needs to be formally specified before implementation begins. Supports a lightweight Draft Mode for quick exploratory passes (triggered by 'draft'/'quick draft'/'explore' language)."
-tools: Read, Write, Glob, AskUserQuestion
+tools: Read, Write, Glob, AskUserQuestion, Skill
 model: opus
 color: purple
 ---
@@ -88,7 +88,7 @@ Runs immediately after DOCUMENT MODE DETECTION, before UPSTREAM EXISTENCE CHECK.
 
 ## UPSTREAM EXISTENCE CHECK, SKILL LOADING, DISCOVERY, DRAFT PHASE, FINAL REVIEW
 
-Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check, Discovery Phase Full Flow (or Draft Mode flow from `skills/requirements-writing/SKILL.md` if triggered), Draft Phase Write Tool Shared Steps, and Final Review Phase Template, in that order. Skill Loading means: `Read` `skills/writer-shared/SKILL.md` once at the start of every run, then `Read` `skills/requirements-writing/SKILL.md` for the target document type's discovery dimensions and artifact format.
+Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check, Discovery Phase Full Flow (or Draft Mode flow from `skills/requirements-writing/SKILL.md` if triggered), Draft Phase Write Tool Shared Steps, and Final Review Phase Template, in that order. Skill Loading means: invoke `Skill(skill: "writer-shared")` once at the start of every run, then invoke `Skill(skill: "requirements-writing")` for the target document type's discovery dimensions and artifact format.
 
 None of the 4 document types require Mermaid diagrams — do not load `skills/mermaid-diagrams/SKILL.md`.
 
@@ -129,8 +129,8 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 
 ## START
 
-1. Read `skills/writer-shared/SKILL.md`.
+1. Invoke `Skill(skill: "writer-shared")`.
 2. Run **Document Mode Detection** to identify the target document type.
 3. Run **Draft Mode Trigger Detection**.
-4. Run **Upstream Existence Check** (from `skills/writer-shared/SKILL.md`) → read `skills/requirements-writing/SKILL.md` for the target document type → (**Draft Mode flow** if triggered, else **Discovery Phase — Full Flow**) → **Draft Phase** (Write tool).
+4. Run **Upstream Existence Check** (from `skills/writer-shared/SKILL.md`) → invoke `Skill(skill: "requirements-writing")` for the target document type → (**Draft Mode flow** if triggered, else **Discovery Phase — Full Flow**) → **Draft Phase** (Write tool).
 5. Apply **Final Review Phase**, then emit **COMPLETION**.

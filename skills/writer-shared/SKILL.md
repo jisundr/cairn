@@ -93,7 +93,7 @@ Once complete, say explicitly: **"I have enough information to draft the [docume
 
 Runs after Discovery is complete:
 
-1. If the target document type requires diagrams (the loaded doc-type skill states this explicitly), use `Read` to load `skills/mermaid-diagrams/SKILL.md` first and apply its rules while drafting. Skip this step entirely for document types that don't need diagrams — do not load it speculatively.
+1. If the target document type requires diagrams (the loaded doc-type skill states this explicitly), invoke `Skill(skill: "mermaid-diagrams")` first and apply its rules while drafting. Skip this step entirely for document types that don't need diagrams — do not load it speculatively.
 2. Apply any doc-type-specific technical standards the loaded doc-type skill defines for this step (e.g. `solution-architecture-writing`'s `db-standards`/`api-standards`/GraphQL content).
 3. Structure the full content using the artifact format defined in the loaded doc-type skill.
 4. Use the `Write` tool to write exactly one file — do NOT display the full document as text in the session first.

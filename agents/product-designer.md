@@ -1,7 +1,7 @@
 ---
 name: product-designer
 description: "Use this agent to produce ONE design artifact per invocation — UX Specification, UI Layout Specification, or Design System — scoped to a specific project. Upstream documents must exist before downstream ones (prd+user-flows → ux-spec → ui-layout-spec; prd → design-system, independent branch). UI Layout Specification requires Impeccable to be vendored in the project (.claude/skills/impeccable) — aborts that run if absent; invokes it once for pre-fill input into its own discovery, not as a second interview. Invoke when requirements are documented and the user wants to define user interaction and interface structure."
-tools: Read, Write, Glob, AskUserQuestion, WebFetch, Bash
+tools: Read, Write, Glob, AskUserQuestion, WebFetch, Bash, Skill
 model: opus
 color: pink
 ---
@@ -77,7 +77,7 @@ Wait for the answer, then proceed to UPSTREAM EXISTENCE CHECK.
 
 ## UPSTREAM EXISTENCE CHECK, SKILL LOADING
 
-Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check. Skill Loading: `Read` `skills/writer-shared/SKILL.md` once at the start of every run, then `Read` `skills/product-design-writing/SKILL.md` for the target document type's discovery dimensions and artifact format. For `ux-spec.md` only, also `Read` `skills/mermaid-diagrams/SKILL.md` during Draft Phase (per `skills/writer-shared/SKILL.md`'s Draft Phase step 1) — not for `ui-layout-spec.md` or `design-system.md`.
+Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check. Skill Loading: invoke `Skill(skill: "writer-shared")` once at the start of every run, then invoke `Skill(skill: "product-design-writing")` for the target document type's discovery dimensions and artifact format. For `ux-spec.md` only, also invoke `Skill(skill: "mermaid-diagrams")` during Draft Phase (per `skills/writer-shared/SKILL.md`'s Draft Phase step 1) — not for `ui-layout-spec.md` or `design-system.md`.
 
 ---
 
@@ -137,9 +137,9 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 
 ## START
 
-1. Read `skills/writer-shared/SKILL.md`.
-2. Run **Document Mode Detection** (ask if ambiguous) → **Upstream Existence Check** → read `skills/product-design-writing/SKILL.md` for the target document type.
+1. Invoke `Skill(skill: "writer-shared")`.
+2. Run **Document Mode Detection** (ask if ambiguous) → **Upstream Existence Check** → invoke `Skill(skill: "product-design-writing")` for the target document type.
 3. For `ui-layout-spec.md` only: run **Impeccable Shape Pass**.
 4. For `ui-layout-spec.md`/`design-system.md`: run **Reference Artifact Intake** if a `Reference Artifact:` field is present.
-5. Run **Discovery Phase** → **Draft Phase** (Write tool, loading `skills/mermaid-diagrams/SKILL.md` first if producing `ux-spec.md`).
+5. Run **Discovery Phase** → **Draft Phase** (Write tool, invoking `Skill(skill: "mermaid-diagrams")` first if producing `ux-spec.md`).
 6. Apply **Final Review Phase**, then emit **COMPLETION**.

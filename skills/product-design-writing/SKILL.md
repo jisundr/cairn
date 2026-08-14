@@ -27,7 +27,7 @@ Loaded by `product-designer` for all 3 design document types, alongside `writer-
 
 **Output path:** `docs/design/ux-spec.md`
 
-**Requires Mermaid** — load `skills/mermaid-diagrams/SKILL.md` during Draft Phase (Interaction Flows section).
+**Requires Mermaid** — invoke `Skill(skill: "mermaid-diagrams")` during Draft Phase (Interaction Flows section).
 
 **Discovery Dimensions** (ask ONE at a time, cover all 7 before drafting):
 1. Who are the primary user personas and what are their core goals?

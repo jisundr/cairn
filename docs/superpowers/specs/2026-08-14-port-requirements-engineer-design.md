@@ -1,0 +1,110 @@
+# Design: Port `requirements-engineer` from maestro into cairn
+
+## Summary
+
+Port maestro's `requirements-engineer` agent into cairn as a single, self-contained agent — no cross-agent handoffs, no fixed-roster dependencies. This is the first agent-plus-skill port from maestro into cairn, and the first entry in cairn's `skills/` directory (currently empty).
+
+## Source
+
+- `~/Projects/maestro/.claude/agents/requirements-engineer.md`
+- `~/Projects/maestro/.claude/skills/writer-agent-guide/SKILL.md`
+- `~/Projects/maestro/.claude/skills/{project-definition,prd,user-stories,user-flows}-guide/SKILL.md`
+
+## Scope decision
+
+maestro is a fully workflow-bound agentic framework: 19 agents wired into one mesh via `intent-analyzer` (central router, references all 19) and hub agents like `documentation-auditor` (references `product-designer`, `solution-architect`, `documentation-engineer`, `meta-engineer`, `release-manager`, `competitor-analyst`). `requirements-engineer` alone pulls in that entire mesh through its `PHASE HANDOFF → documentation-auditor` step.
+
+cairn's design is the opposite: no fixed agent roster, self-contained agents (`idea-explorer` has exactly one hard external dependency — `superpowers:brainstorming` — and aborts rather than reimplement methodology it doesn't own). Recreating the full mesh would mean forking maestro's entire architecture into cairn, which is a different, much larger project and structurally contradicts cairn's design.
+
+**Decision: port `requirements-engineer` alone**, self-contained, keeping its own internal 4-document dependency chain (that's local to this one agent, not a cross-agent dependency) and its Draft Mode (also fully internal — no other agent involved). Drop everything that reaches for another maestro agent or a maestro-only convention cairn has no counterpart for.
+
+## What's dropped and why
+
+| maestro feature | Why dropped |
+|---|---|
+| `PHASE HANDOFF → documentation-auditor` | Reaches for an agent that isn't being ported; cairn agents don't hand off to a fixed roster. |
+| Feature Status Gate (reads `docs/project-definition/02_identity.md` Section 4) | Keyed to a maestro-wide feature-status tracking file cairn has no counterpart for. |
+| Feature Scope Resolution / feature-scoped output paths (`docs/features/<name>/requirements/`) | Keyed to a `Feature Scope:` field maestro's own `intent-analyzer` injects into opening context; cairn's `intent-analyzer` has no such field. Flat paths only. |
+| Optional Competitive Input (reads `competitor-analyst` snapshots) | `competitor-analyst` isn't being ported; this was optional/presence-gated in maestro too, so dropping it changes nothing structurally. |
+| ClickUp exit row (defers to `project-manager`) | `project-manager` isn't being ported. |
+| `mermaid-diagram-guide` load step in Draft Phase | None of the 4 artifact templates use diagrams (Scope & Boundaries explicitly forbids them; none of the other sections call for one). Dead weight for this agent. |
+| Adaptive Output Rule (single-file vs numbered multi-file split) | None of the 4 doc-type guides define a Split Condition — all four are always single-file. This machinery exists in `writer-agent-guide` for other maestro writer agents (e.g. architecture docs), not for these four. |
+| "Scope & Boundaries" 4-status-table section (Implemented / Current / Pending Review ×2) in Project Definition & PRD templates | This table is the artifact-side half of the Feature Status Gate mechanic — it only gets populated/maintained by that gate, which is dropped. Kept without the gate it'd just be a permanently-stub section. `project-definition.md` already has Goals/Non-Goals and `prd.md` already has an Out of Scope list — those cover the same "what's in/out" need without the dead machinery. |
+
+## What's kept
+
+- **Modes:** Formal (default, full discovery), Draft (`DRAFT REQUEST` prefix or explicit draft/explore language; 3-question minimal discovery → 2-3 approaches with recommendation → confirm → write), Update (existing doc → targeted re-interview on in-scope sections only).
+- **4-document dependency chain**, entirely internal to this one agent:
+  ```
+  project-definition.md (tier 1, no upstream)
+     → prd.md (tier 2, requires project-definition.md)
+        → user-stories.md (tier 3, requires prd.md)
+        → user-flows.md  (tier 3, requires prd.md)
+  ```
+  Tier 3 documents may be produced in parallel (two separate invocations) since they don't depend on each other.
+- **Upstream Existence Check** — refuse (`TERMINATED: ...`) if the required upstream doc is missing.
+- **One artifact per run** — hard rule, refuse multi-artifact requests.
+- **Discovery Phase discipline** — one question at a time via `AskUserQuestion`, suggestions labeled as examples never auto-accepted, no drafting during discovery, explicit "I have enough information to draft the [document type]" checkpoint.
+- **Final Review Phase** — after `Write`, ask "Happy with the changes?" (Yes → done; No → revise and re-write) via `AskUserQuestion`.
+- **Draft-to-formal upgrade path** — a doc carrying the `**Draft**` callout, re-run without a draft trigger, gets the callout stripped and version bumped one full minor past where a from-scratch formal doc would start (documents the draft revision as real history).
+- **Document metadata block** (version, Last Updated, Derived From, Author/LLM Model, Reviewed By) — same shared template, `Derived From` simplified to just "User discovery interview" (drops maestro's agent-pipeline provenance language since there's no upstream agent chain).
+
+## Agent: `agents/requirements-engineer.md`
+
+```yaml
+---
+name: requirements-engineer
+description: "Use this agent to produce ONE requirements artifact per invocation — Project Definition, PRD, User Stories, or User Flows — scoped to a specific project or feature. Upstream documents must exist before downstream ones (project-definition → prd → user-stories/user-flows). Multiple instances may run in parallel on different scopes at the same tier. Invoke when a user has an idea, feature request, or product goal that needs to be formally specified before implementation begins. Supports a lightweight Draft Mode for quick exploratory passes (triggered by 'draft'/'quick draft'/'explore' language) alongside the full formal discovery flow."
+tools: Read, Write, Glob, AskUserQuestion
+model: opus
+---
+```
+
+Body carries (trimmed per the table above, merged from maestro's agent file + the shared `writer-agent-guide` sections it actually uses):
+- SYSTEM ROLE — Requirements Engineer, requirements-only scope, no architecture/design/code
+- WORKFLOW INTENT — dependency tiers, parallel-safe tier 3, Formal/Draft/Update mode table
+- HARD REQUIREMENTS — one artifact/run, upstream-must-exist, requirements-only, no partial drafts, no file writes without confirmation, testable acceptance criteria, load doc skill before discovery, flat output path only
+- DOCUMENT MODE DETECTION — identify target doc type from request; `AskUserQuestion` if ambiguous
+- DRAFT MODE trigger detection, minimal discovery, approach proposal, exploratory callout, draft-to-formal upgrade
+- DEPENDENCY CHAIN table + Update mode note
+- UPSTREAM EXISTENCE CHECK
+- SKILL LOADING — loads `skills/requirements-writing/SKILL.md`, target-doc-type section
+- DISCOVERY PHASE
+- DRAFT PHASE (Write tool) — no mermaid step
+- FINAL REVIEW PHASE
+- **COMPLETION** (replaces PHASE HANDOFF — terminal, no agent to hand off to):
+  ```
+  Result
+    Status → ✅ COMPLETE
+    Document → [type], written to [path]
+  ```
+- EXIT & DERAILMENT HANDLING — the four generic rows (upstream missing, multi-artifact request, skip-discovery, session-abandoned) plus: architecture/design/code request → refuse, scope is requirements only; finalize-without-testable-criteria → ask one more question. ClickUp row dropped (no `project-manager`).
+- START — numbered sequence mirroring the phases above, minus Feature Status Gate / Feature Scope Resolution / Competitive Input steps.
+
+## Skill: `skills/requirements-writing/SKILL.md`
+
+One file (splittable later — nothing here locks in a merge). Merges:
+- From `writer-agent-guide`: Suggestion Assistance Rule, Shared Enforcement Rules, Document Metadata template (simplified `Derived From`), Discovery Phase shared rules, Upstream Existence Check procedure, Discovery Phase full flow, Draft Phase write-tool steps (mermaid step removed), Minimal Discovery + Approach Proposal templates (Draft Mode), Exploratory Callout template, Final Review Phase template, Update Mode shared steps, generic exit rows.
+- From the 4 doc guides: discovery dimensions, artifact format (Scope & Boundaries table removed from `project-definition` and `prd` templates per the table above), writing standards — one section per doc type, selected by the agent at Skill Loading time based on target document.
+
+## File changes
+
+- **New:** `agents/requirements-engineer.md`
+- **New:** `skills/requirements-writing/SKILL.md`
+- **Edit:** `.claude-plugin/plugin.json` — version `0.6.0` → `0.7.0` (new user-visible agent + skill, per CLAUDE.md versioning rule)
+- **Edit:** `CLAUDE.md` — add a `requirements-engineer` entry to the Architecture section describing scope, dependency chain, output location, and the maestro-port trimming decisions above (so future edits don't accidentally reintroduce dropped coupling)
+
+## Testing / verification
+
+No unit-test equivalent exists for natural-language agents in cairn (`idea-explorer` has none either). Verify via the same headless pattern CLAUDE.md documents for commands, adapted for an agent:
+
+```bash
+cd /some/scratch/dir
+claude -p "Produce a project definition for a simple todo app" --plugin-dir /path/to/cairn --permission-mode bypassPermissions --output-format text
+```
+
+Run once for the tier-1 doc (project-definition, no upstream — should proceed straight to discovery), once for a tier-2/3 doc with no upstream present (should `TERMINATED`), and once for a Draft Mode trigger. Inspect the scratch directory's `docs/requirements/*.md` output, not just the reported text.
+
+## Open questions
+
+None outstanding — all scope, naming, model, and skill-structure decisions were resolved during brainstorming above.

@@ -15,8 +15,8 @@ regression is the score dropping, not one case flipping.
 Run:
     pytest tests/test_intent_routing.py -v -s
 
-(-s shows the per-case PASS/FAIL summary and any failure detail even
-when the overall assertion still passes.)
+(-s shows the per-case PASS/FAIL/TIMEOUT summary and any failure detail
+even when the overall assertion still passes.)
 """
 
 import re
@@ -70,20 +70,30 @@ MIN_PASS = len(ROUTING_CASES) - 2
 
 
 def _run_case(claude_bin, agents_json, case_dir, prompt, expected):
-    result = subprocess.run(
-        [
-            claude_bin,
-            "-p", prompt,
-            "--agents", agents_json,
-            "--agent", "intent-analyzer",
-            "--model", "haiku",
-            "--output-format", "text",
-        ],
-        cwd=case_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(
+            [
+                claude_bin,
+                "-p", prompt,
+                "--agents", agents_json,
+                "--agent", "intent-analyzer",
+                "--model", "haiku",
+                "--output-format", "text",
+            ],
+            cwd=case_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "prompt": prompt,
+            "expected": expected,
+            "ok": False,
+            "output": "",
+            "stderr": "timed out after 120s",
+            "timeout": True,
+        }
     text = result.stdout
     pattern = ROUTING_DECISION_RE.format(re.escape(expected))
     return {
@@ -92,6 +102,7 @@ def _run_case(claude_bin, agents_json, case_dir, prompt, expected):
         "ok": bool(re.search(pattern, text)),
         "output": text,
         "stderr": result.stderr,
+        "timeout": False,
     }
 
 
@@ -100,7 +111,7 @@ def test_routing_accuracy(claude_bin, intent_analyzer_agents_json, tmp_path_fact
     # isn't safe to call concurrently from worker threads.
     case_dirs = [tmp_path_factory.mktemp(f"case{i}") for i in range(len(ROUTING_CASES))]
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         results = list(pool.map(
             lambda args: _run_case(claude_bin, intent_analyzer_agents_json, *args),
             (
@@ -113,7 +124,8 @@ def test_routing_accuracy(claude_bin, intent_analyzer_agents_json, tmp_path_fact
     failed = [r for r in results if not r["ok"]]
 
     summary = "\n".join(
-        f"  [{'PASS' if r['ok'] else 'FAIL'}] {r['expected']:<14} {r['prompt']}"
+        f"  [{'PASS' if r['ok'] else ('TIMEOUT' if r['timeout'] else 'FAIL')}] "
+        f"{r['expected']:<14} {r['prompt']}"
         for r in results
     )
     print(f"\nRouting accuracy: {len(passed)}/{len(results)}\n{summary}")
@@ -126,7 +138,12 @@ def test_routing_accuracy(claude_bin, intent_analyzer_agents_json, tmp_path_fact
         )
         print(f"\nFailed case detail:\n{detail}")
 
+    timed_out = [r for r in failed if r["timeout"]]
+    misclassified = [r for r in failed if not r["timeout"]]
+
     assert len(passed) >= MIN_PASS, (
         f"Only {len(passed)}/{len(results)} routing cases passed "
-        f"(need >= {MIN_PASS}). Failed: {[r['prompt'] for r in failed]}"
+        f"(need >= {MIN_PASS}). "
+        f"Timed out: {[r['prompt'] for r in timed_out]}. "
+        f"Misclassified: {[r['prompt'] for r in misclassified]}"
     )

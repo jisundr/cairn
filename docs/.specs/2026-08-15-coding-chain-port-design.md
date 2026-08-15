@@ -78,7 +78,12 @@ Matches maestro's pattern — `Glob`-check before loading, skip silently if `.ha
 
 `harness-engineer` is also invocable standalone at any time, and auto-suggested by `task-orchestrator` Plan Mode on first run if `.harness/` is absent entirely.
 
-**Fresh codebase.** `harness-engineer`'s hard rule — never invent a rule with no observed basis — means Generate mode on a genuinely empty/near-empty repo (no source files beyond scaffolding) would otherwise write near-blank files full of `<!-- no convention observed -->` markers. Instead, Generate mode detects this case and switches to an interview: `AskUserQuestion` for stack/style/testing preferences directly, rather than deriving from observation. These rules are written with a **`user-specified`** provenance tag in place of the usual evidence count, so they're visibly distinct from observed rules. Once real code accumulates, a later Update mode run diffs observed conventions against the file as normal — user-specified rules stay untouched unless the codebase actively diverges from them (surfaced as a normal split/inconsistent-observation choice), and new observed rules get added alongside.
+**Fresh codebase.** `harness-engineer`'s hard rule — never invent a rule with no observed basis — means Generate mode on a genuinely empty/near-empty repo (no source files beyond scaffolding) would otherwise write near-blank files full of `<!-- no convention observed -->` markers. Instead, Generate mode detects this case and switches to a pre-fill-then-interview flow:
+
+1. **Pre-fill from existing planning artifacts.** `Glob`-check for `docs/architecture/architecture-spec.md` (+ `docs/backend/{db-schema,api-spec}.md`, `docs/adr/*.md` if present) — `solution-architect` commonly produces these before any code exists. Pull stack, layering, data-storage, and service-contract decisions already made there straight into `architecture.md` (and relevant `standards.md` sections), tagged **`from-architecture-spec`** citing the source doc.
+2. **Interview for the rest.** Whatever isn't covered by those upstream docs (style conventions, test placement, workflow/branch/commit format — things an Architecture Specification doesn't decide) goes through `AskUserQuestion` directly. Written with a **`user-specified`** provenance tag.
+
+Both tags stand in place of the usual evidence count, visibly distinct from observed rules. Once real code accumulates, a later Update mode run diffs observed conventions against the file as normal — pre-filled and user-specified rules stay untouched unless the codebase actively diverges (surfaced as a normal split/inconsistent-observation choice), and new observed rules get added alongside.
 
 ## Testing & verification
 

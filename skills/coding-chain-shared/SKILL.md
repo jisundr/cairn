@@ -13,7 +13,7 @@ Shared file templates used across the coding chain. This is an **asset bundle, n
 - `assets/task/STATE.template.md` — seed content for `docs/.tasks/<slug>/STATE.md` (`task-orchestrator`, Plan Mode)
 - `assets/task/HISTORY.template.md` — seed content for `docs/.tasks/<slug>/HISTORY.md` (`task-orchestrator`, Plan Mode)
 - `assets/task/UAT.template.md` — seed content for `docs/.tasks/<slug>/UAT.md` (`task-orchestrator`, Publish Mode)
-- `assets/harness/architecture.template.md`, `standards.template.md`, `workflow.template.md` — seed shape for `.harness/*.md` (`harness-engineer`, Generate mode)
+- `assets/harness/architecture.template.md`, `standards.template.md`, `workflow.template.md`, `environment.template.md` — seed shape for `.harness/*.md` (`harness-engineer`, Generate mode). `environment.md` differs from the other three: its rules are a typed, machine-checkable vocabulary (`tool-version` / `port-open` / `env-var-set` / `command`) executed by `task-orchestrator`'s Environment Preflight step, not prose guidance other agents read and follow — each rule also carries a `[blocking]`/`[warning]` severity tag the other three files don't have.
 
 Every template's headings are structural scaffolding only — content under them is always derived (evidence-based for `.harness/`, decomposed-from-PRD for `TRACKER.md`, chain-state for `STATE.md`/`HISTORY.md`/`UAT.md`), never copied verbatim from the template itself.
 

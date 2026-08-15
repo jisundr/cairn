@@ -111,6 +111,18 @@ One nuance this resolves: `writing-plans`' own plan template carries a `REQUIRED
 
 **`STATE.md`** (inside the task folder) — overwritten by whichever agent just finished: phase, handoff target, status, a `Plan:` pointer to the `docs/.plans/` file this task tracks (see Templates below), worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — one glance shows where things stand. `HISTORY.md`, alongside it, is the append-only log: one summarized line per completed phase (not full detail — that lives in git history / actual test output).
 
+## Submodules
+
+Light support only — not maestro's full subsystem (Pre-Chain Preflight, Post-Merge Submodule Sync with a merge-target-vs-tracked-branch guard, `pending-submodule-sync.md` tracking, auto-triggered by `gitlab-mr-reviewer`'s Thread Watch). That's a subsystem of its own, and its trigger mechanism (`gitlab-mr-reviewer`) isn't ported here anyway.
+
+- `task-orchestrator` detects submodule scope from the plan's Files section (paths inside a submodule directory) and creates the worktree/branch inside that submodule instead of the parent repo.
+- **No copy step needed for `.harness/`** — since it's committed (see below), `git worktree add` already carries it into any new worktree, parent or submodule, same as any other tracked file. Maestro needed `swarm.sh` to explicitly copy `.harness/` in because it's gitignored there; that whole mechanism is unnecessary here.
+- Parent-repo pointer bump after a submodule PR merges stays manual — same as today, no automation added.
+
+## `.harness/` is committed, not gitignored
+
+Reverses maestro's own convention (gitignored by design there). Committing it means: it propagates to every clone/checkout automatically — any developer, or any submodule, gets the standard setup for free, no separate distribution step. It also directly eliminates the worktree-copy problem above. `.harness/`'s own content is still 100% evidence-derived and confirmed via `AskUserQuestion` before writing (see `.harness/` presence-gating above) — only its git status changes, not how it's generated.
+
 ## Unattended execution
 
 Long-running Chain-flow tasks can run detached, unsupervised — same mechanism as maestro's `swarm.sh`, ported as-is rather than replaced with Claude Code's native background primitives: tmux is a hard prerequisite, every run launches via `tmux new-session -d`, attach with `tmux attach -t <branch>`. Applies to Chain flow only — Direct flow's small fixes have no reason to run unattended.

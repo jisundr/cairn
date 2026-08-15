@@ -181,7 +181,7 @@ Sits between requirements and implementation, as an **optional** last step after
 
 Adapted from maestro's `harness-rules-guide/assets/*.template.md` and `delivery-tracker/assets/TRACKER.template.md` — literal template assets, not just prose format description. Live under a new shared skill, `skills/coding-chain-shared/assets/`, referenced by `project-manager`/`harness-engineer`/`task-orchestrator` the way `writer-shared` is referenced by the writer trio.
 
-**`docs/.tasks/TRACKER.template.md`** — stripped of maestro's backend/milestone/promote-to-GitLab-ClickUp language entirely, since there's no backend:
+**`docs/.tasks/TRACKER.template.md`** — stripped of maestro's milestone grouping (`M001` sections) and ClickUp-only assumption, kept its backend/board-state layering and Idea-row concept (see Ticket Sync above, now GitHub/GitLab/ClickUp instead of ClickUp-only):
 
 ```markdown
 # Task Tracker

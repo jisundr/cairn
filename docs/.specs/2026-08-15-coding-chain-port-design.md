@@ -20,7 +20,8 @@ All six are new agent files under `agents/`. No existing agent file is modified 
 - `~/Projects/maestro/.claude/agents/{project-manager,harness-engineer,task-orchestrator,qa-engineer,software-engineer,qa-auditor}.md`
 - `~/Projects/maestro/.claude/skills/delivery-tracker/SKILL.md` (TRACKER.md format — local-only subset, see Task Decomposition below)
 - `~/Projects/maestro/.claude/skills/harness-rules-guide/SKILL.md`
-- `~/Projects/maestro/.claude/skills/coding-chain-guide/SKILL.md` (chain sequencing, fix-cycle routing — infra sections not ported, see below)
+- `~/Projects/maestro/.claude/skills/coding-chain-guide/SKILL.md` (chain sequencing, fix-cycle routing, and its "Unattended Runs (swarm.sh)" section)
+- `~/Projects/maestro/.claude/scripts/swarm.sh` (tmux/worktree/stale-detection mechanics — ported, see Unattended Execution below)
 
 ## Scope decision
 
@@ -33,7 +34,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 | GitLab/ClickUp sync itself (auth, MCP/CLI calls to an external backend) | Confirmed not needed — task identity and the task list both stay local (see Task Decomposition below); `project-manager` IS ported, but as a local-only decomposition agent, not a tracker-sync agent |
 | `delivery-tracker`'s `tracker.html` static kanban viewer | Real, self-contained, zero-dependency — but extra scope beyond what was asked; `docs/.tasks/TRACKER.md` stays a plain Markdown table for now, viewer is a clean future add-on if wanted |
 | `.codegraph/` MCP tool (call-site/blast-radius analysis) | Same precedent as `codebase-auditor`'s port — no codegraph dependency in cairn |
-| `swarm.sh` (tmux + detached unattended runs, `SWARM_STATE.md`) | No unattended mode in this design — chain runs in the current session like every other cairn agent, worktree isolation comes from `superpowers:using-git-worktrees` instead |
+| Maestro's Interactive/Auto mode distinction | Claude Code itself already has auto/manual permission modes — no need to reimplement a separate mode split on top of them. Only Attended vs. Unattended remains as a coding-chain-specific distinction (see Unattended Execution below) |
 | `.maestro/token-usage.db` MR token-usage section | cairn's usage tracking is the separate `/cairn-usage` dashboard, not per-task |
 | Hard 80% coverage gate | Stack-agnostic here means coverage tooling availability varies; best-effort report instead (see Testing section) |
 | Per-stack engineer-guide skills (react/fastapi/rust/tauri/etc.) | Stack-agnostic implementation — infer conventions from the repo itself, no maintained per-stack skill library |
@@ -44,9 +45,9 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 | Agent | Model | Role | Terminal? |
 |---|---|---|---|
-| `project-manager` | sonnet | Decomposes `docs/requirements/prd.md` (+ `user-stories.md`) into task stubs, writes `docs/.tasks/TRACKER.md` (local index). Update Mode auto-syncs each row's status from its matching `docs/.tasks/YYYY-MM-DD-<slug>.md` Task State, if one exists | Terminal |
+| `project-manager` | sonnet | Decomposes `docs/requirements/prd.md` (+ `user-stories.md`) into task stubs, writes `docs/.tasks/TRACKER.md` (local index). Update Mode auto-syncs each row's status from its matching `docs/.tasks/YYYY-MM-DD-<slug>/STATE.md`, if that folder exists | Terminal |
 | `harness-engineer` | sonnet | Generate/update `.harness/*.md` from observed conventions (or, on a fresh codebase, from a direct interview — see Fresh Codebase below), `AskUserQuestion` per-rule confirm gate, evidence-based by default, ~40-line cap per file | Terminal |
-| `task-orchestrator` | sonnet | Plan Mode: hard-requires `docs/.plans/<feature>.md` to exist (reads it as the plan, does not re-author it — see Plan Dedup below), create/resume `docs/.tasks/YYYY-MM-DD-<feature-slug>.md` as a thin layer over it (feasibility assessment + worktree/branch + Task State only), run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
+| `task-orchestrator` | sonnet | Plan Mode: hard-requires `docs/.plans/<feature>.md` to exist (reads it as the plan, does not re-author it — see Plan Dedup below), create/resume `docs/.tasks/YYYY-MM-DD-<feature-slug>/` as a thin layer over it (feasibility assessment + worktree/branch + STATE.md/HISTORY.md only), run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
 | `qa-engineer` | sonnet | Writes tests — pre-implementation (TDD red, hard-requires `superpowers:test-driven-development`) in the chain, or post-implementation in Direct Mode | Hands off |
 | `software-engineer` | opus | Implements in-scope code, stack-agnostic, makes qa-engineer's tests pass (TDD green) | Hands off |
 | `qa-auditor` | sonnet | Independent post-impl re-verification: scoped tests, best-effort coverage report, code quality; conditional security/perf/dependency checks (tag- or software-engineer-flagged, same routing as maestro) | Hands off → task-orchestrator Publish |
@@ -99,14 +100,26 @@ Both tags stand in place of the usual evidence count, visibly distinct from obse
 
 No tracker, so no T### numbers. Task identity is a feature-name slug, date-prefixed exactly like `docs/.plans/` and `docs/.specs/` already are:
 
-- **`docs/.tasks/YYYY-MM-DD-<feature-slug>.md`** — owned by `task-orchestrator`, standalone format for tracking, not planning (not routed through `plan-writing`/`writing-plans` for *content* — a deliberate divergence from the "hard-required, never reimplemented" pattern for plan *authoring* specifically, while still hard-requiring `superpowers:using-git-worktrees` for the *worktree/git mechanics*). Committed/versioned like `docs/.plans/`, not gitignored state. Date prefix means collision is only possible same-day same-slug — `task-orchestrator` just asks (resume vs. new slug) if that happens.
+- **`docs/.tasks/YYYY-MM-DD-<feature-slug>/`** — owned by `task-orchestrator`, a **folder** (not a single file — see Unattended Execution below for why), standalone format for tracking, not planning (not routed through `plan-writing`/`writing-plans` for *content* — a deliberate divergence from the "hard-required, never reimplemented" pattern for plan *authoring* specifically, while still hard-requiring `superpowers:using-git-worktrees` for the *worktree/git mechanics*). Scratch (git-excluded within the worktree) while the chain is actively running; `task-orchestrator`'s Publish Mode commit explicitly includes the folder's final state, making it permanent history once merged — `TRACKER.md`'s Task File link stays valid forever, it's never cleaned up post-merge. Date prefix means collision is only possible same-day same-slug — `task-orchestrator` just asks (resume vs. new slug) if that happens.
 - **`docs/.plans/`** stays exactly what it is today — output of `plan-writing`/`writing-plans` for architectural brainstorming work.
 
-**Plan Dedup.** Chain flow only starts after the gate has already run `spec-writing`→`plan-writing`, which produces `docs/.plans/<feature>.md` — a full implementation plan. `task-orchestrator` Plan Mode hard-requires this file (same "Upstream Existence Check" pattern `solution-architect` uses for prd+user-flows) and reads it as *the* plan — it does not re-draft implementation steps into `docs/.tasks/`. That file adds only what `plan-writing` doesn't produce: the feasibility assessment, worktree/branch identity, and the Task State log. One consequence: `superpowers:executing-plans` is never invoked for Chain flow — the plan-tracking role it would normally play is replaced entirely by `task-orchestrator`'s own Task State log, and `docs/.plans/<feature>.md` itself stays static reference material once written.
+**Plan Dedup.** Chain flow only starts after the gate has already run `spec-writing`→`plan-writing`, which produces `docs/.plans/<feature>.md` — a full implementation plan. `task-orchestrator` Plan Mode hard-requires this file (same "Upstream Existence Check" pattern `solution-architect` uses for prd+user-flows) and reads it as *the* plan — it does not re-draft implementation steps into `docs/.tasks/`. That folder adds only what `plan-writing` doesn't produce: the feasibility assessment, worktree/branch identity, and the Task State log.
 
-**`## Task State` section**, inside the task file, two parts:
-- `### Current` — overwritten by whichever agent just finished: phase, handoff target, status, a `Plan:` pointer to the `docs/.plans/` file this task tracks (see Templates below), worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — top of file, one glance shows where things stand.
-- `### History` — append-only, one summarized line per completed phase (not full detail — that lives in git history / actual test output).
+**Naming match.** The plan's `<feature-name>` must equal the task's slug exactly, so lookup is unambiguous: `Glob(docs/.plans/*-<slug>.md)` — matched on slug only, not date, since the plan may have been written days before the task actually runs. When the user asks `plan-writing` to create a plan for a `TRACKER.md` row, the row's slug is what gets passed through as the plan's feature-name — not independently chosen.
+
+One nuance this resolves: `writing-plans`' own plan template carries a `REQUIRED SUB-SKILL: superpowers:subagent-driven-development or superpowers:executing-plans` header and an Execution Handoff step asking the user to choose between them — neither of which is `task-orchestrator`'s chain. No change to `plan-writing`/`writing-plans` is needed to resolve this: plan *creation* and task *execution* are two separate, explicitly user-triggered actions in this design (per Task Decomposition below — a user picks a `TRACKER.md` row and asks for a plan; running the task is a distinct later request). Whatever `plan-writing`'s own Execution Handoff dialogue suggests is simply not acted on in the coding-chain context — the user's subsequent "run this task" (or `/cairn-run-task`) request is what invokes `task-orchestrator` directly, superseding it. `docs/.plans/<feature>.md` stays static reference material once written; `superpowers:executing-plans` is never invoked for Chain flow.
+
+**`STATE.md`** (inside the task folder) — overwritten by whichever agent just finished: phase, handoff target, status, a `Plan:` pointer to the `docs/.plans/` file this task tracks (see Templates below), worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — one glance shows where things stand. `HISTORY.md`, alongside it, is the append-only log: one summarized line per completed phase (not full detail — that lives in git history / actual test output).
+
+## Unattended execution
+
+Long-running Chain-flow tasks can run detached, unsupervised — same mechanism as maestro's `swarm.sh`, ported as-is rather than replaced with Claude Code's native background primitives: tmux is a hard prerequisite, every run launches via `tmux new-session -d`, attach with `tmux attach -t <branch>`. Applies to Chain flow only — Direct flow's small fixes have no reason to run unattended.
+
+- **Two modes total**, replacing maestro's three-way Interactive/Auto/Unattended split (Claude Code's own permission modes already cover the Interactive-vs-Auto distinction, nothing to reimplement there): **Attended** (default — runs in the current session like every other cairn agent) and **Unattended** (tmux-detached).
+- **`docs/.tasks/<slug>/STATE.md` + `HISTORY.md`** take `SWARM_STATE.md`'s control-plane role — the durable, coarse-by-design record that survives a session boundary (which resuming an unattended run needs). Same files used for attended runs — no separate unattended-only format.
+- **Handoff-needed pause.** A chain step that hits something it can't resolve alone in an unattended context (`AskUserQuestion` isn't available in a detached run, same constraint noted elsewhere in this design for background subagents) sets `STATE.md`'s `Phase: HANDOFF NEEDED` with its question in `Key info`, appends the same to `HISTORY.md`, and stops cleanly rather than hanging. A human resolves it by editing `STATE.md`'s answer field and re-triggering the run to resume (same worktree/branch reused).
+- **Monitoring.** A read-only monitor pass reports progress + branch/PR status from `STATE.md`/`HISTORY.md` alone, printing the question and a bounded `tmux capture-pane` tail on `HANDOFF NEEDED`.
+- **Stale detection.** Fingerprints progress each check via `git rev-parse HEAD` + `git status --porcelain` + `STATE.md`'s current phase; repeated identical fingerprints with no completion conclude the run is stalled and stop it, rather than running forever.
 
 ## Task decomposition (`project-manager`)
 
@@ -114,9 +127,9 @@ Sits between requirements and implementation, as an **optional** last step after
 
 - **Generate mode** (no `docs/.tasks/TRACKER.md` yet): reads the PRD, proposes a decomposition into discrete task stubs, confirmed via `AskUserQuestion` before writing (same descriptive→prescriptive-style gate as `harness-engineer`, applied to task boundaries instead of code conventions). Writes `docs/.tasks/TRACKER.md`: one row per task — slug, one-line scope, status.
 - **Granularity:** one row per user story when `user-stories.md` exists — a user story is already sized right for one branch/PR/TDD-cycle, and cairn's own `documentation-auditor` already traces every PRD `FR-###` to a user story, so the atomic boundary is already vetted. Falls back to one row per PRD feature/epic section when no `user-stories.md` exists to decompose from.
-- **Update mode** (`TRACKER.md` exists): diffs the current PRD against it — new requirements become new rows, nothing gets silently removed. Also resyncs every row's status by `Glob`-ing `docs/.tasks/` for a file matching that row's slug and reading its Task State `### Current` phase (`Not Started` if no matching file yet, `In Progress: <phase>` from `### Current`, `Published` once `task-orchestrator` Publish Mode completed it). Read-only against the per-task files — never writes into them, that's `task-orchestrator`'s territory.
+- **Update mode** (`TRACKER.md` exists): diffs the current PRD against it — new requirements become new rows, nothing gets silently removed. Also resyncs every row's status by `Glob`-ing `docs/.tasks/` for a folder matching that row's slug and reading its `STATE.md` phase (`Not Started` if no matching folder yet, `In Progress: <phase>` from `STATE.md`, `Published` once `task-orchestrator` Publish Mode completed it). Read-only against the per-task folders — never writes into them, that's `task-orchestrator`'s territory.
 - Terminal — does not itself invoke `task-orchestrator`. A `TRACKER.md` row is picked up later, either via `/cairn-run-task <slug>` (see below) or a plain natural-language request naming the task — that's when the gate/`plan-writing`/`task-orchestrator` sequence actually runs for that one task.
-- `docs/.tasks/TRACKER.md`'s slugs are the same namespace `task-orchestrator` creates per-task files in (`docs/.tasks/YYYY-MM-DD-<slug>.md`) — a row's slug and its eventual task file's slug must match for status auto-sync to find it.
+- `docs/.tasks/TRACKER.md`'s slugs are the same namespace `task-orchestrator` creates per-task folders in (`docs/.tasks/YYYY-MM-DD-<slug>/`) — a row's slug and its eventual task folder's slug must match for status auto-sync to find it.
 
 **UAT checklist** — `task-orchestrator` Publish Mode generates a short manual-verification checklist from the task's scope, included in the PR/MR body. Kept from maestro; useful even solo as a pre-merge sanity pass.
 
@@ -126,7 +139,9 @@ Sits between requirements and implementation, as an **optional** last step after
 
 ## New command: `/cairn-run-task`
 
-`/cairn-run-task <feature-slug>` — creates or resumes `docs/.tasks/YYYY-MM-DD-<feature-slug>.md` and runs the Chain flow from wherever its `### Current` state left off. Chain-flow only, since Direct flow never creates a task file — small bug-fixes stay natural-language-only through `intent-analyzer`'s normal routing, no command entry point for them. Still also reachable via plain natural-language request for Chain-flow work; this command is a direct entry point for the "call task, let it run" usage pattern.
+`/cairn-run-task <slug-or-path> [--unattended]` — creates or resumes `docs/.tasks/YYYY-MM-DD-<feature-slug>/` and runs the Chain flow from wherever its `STATE.md` left off. Accepts either a bare slug or a pasted path (to the task folder or any file inside it, or to the `docs/.plans/` file) — resolves either form to the right task rather than requiring the bare slug only. Chain-flow only, since Direct flow never creates a task folder — small bug-fixes stay natural-language-only through `intent-analyzer`'s normal routing, no command entry point for them.
+
+**Attended vs. unattended:** `--unattended` forces the tmux-detached mode. If omitted, and `STATE.md` doesn't already record a mode from a prior run, `AskUserQuestion` asks once (Attended / Unattended) before starting — never silently defaults either way. Still also reachable via plain natural-language request for Chain-flow work (attended only — unattended needs the explicit flag or the prompt, there's no natural-language trigger for it); this command is a direct entry point for the "call task, let it run" usage pattern.
 
 ## Templates
 
@@ -137,7 +152,7 @@ Adapted from maestro's `harness-rules-guide/assets/*.template.md` and `delivery-
 ```markdown
 # Task Tracker
 
-> Local-only task board, decomposed from docs/requirements/prd.md by `project-manager`. Status is auto-derived from each task's own docs/.tasks/YYYY-MM-DD-<slug>.md Task State — never edit Status by hand, it's overwritten on next sync.
+> Local-only task board, decomposed from docs/requirements/prd.md by `project-manager`. Status is auto-derived from each task's own docs/.tasks/YYYY-MM-DD-<slug>/STATE.md — never edit Status by hand, it's overwritten on next sync.
 
 | Slug | Scope | Status | Task File |
 |---|---|---|---|
@@ -150,14 +165,12 @@ Run `project-manager` (Update mode) to add rows as the PRD grows and resync Stat
 
 (Resolves the earlier open question about a Task File column — yes, included, filled in once `task-orchestrator` creates the matching file.)
 
-**`docs/.tasks/TASK.template.md`** — the per-task file `task-orchestrator` creates, with the `## Task State` shape locked earlier plus an explicit `Plan:` pointer field (closing the question that was still open when this section was first drafted — every downstream agent now has one unambiguous place to find the actual implementation plan):
+**`docs/.tasks/<slug>/STATE.md`** — the live handoff file `task-orchestrator` creates, with the `## Task State` shape locked earlier plus an explicit `Plan:` pointer field (closing the question that was still open when this section was first drafted — every downstream agent now has one unambiguous place to find the actual implementation plan):
 
 ```markdown
 # Task: <slug>
 
-## Task State
-
-### Current
+Mode: Attended
 Phase: PLAN
 Handoff to: qa-engineer
 Status: <short status>
@@ -166,10 +179,9 @@ Worktree: <path>
 Branch: <branch-name>
 Key info: <whatever the next agent needs right now>
 Harness flags: none
-
-### History
-- PLAN → task-orchestrator, <date>: <one-line summary>
 ```
+
+**`docs/.tasks/<slug>/HISTORY.md`** and **`docs/.tasks/<slug>/UAT.md`** are separate files, not sections of `STATE.md` — `HISTORY.md` is the append-only phase log (one line per completed phase, kept as its own file so it can grow long without bloating the small file every chain step re-reads on every handoff); `UAT.md` is empty until `task-orchestrator` Publish Mode writes the checklist.
 
 **`.harness/architecture.template.md`, `standards.template.md`, `workflow.template.md`** — kept structurally identical to maestro's (Stack/Layering/Boundaries/Data; Naming/Error handling/Testing/Logging; Branching/Commits-MR/Gates), evidence-driven so the actual headings barely matter — content is 100% derived at generation time, never templated. One real change: `workflow.template.md`'s branch-naming example line drops maestro's `feature/T###-<slug>` (no T### here) for **`<task-type>/<slug>`** — `feature/<slug>` or `refactor/<slug>`, matching the two Chain-flow task types.
 

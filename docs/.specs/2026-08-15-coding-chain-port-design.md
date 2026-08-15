@@ -116,4 +116,4 @@ No tracker, so no T### numbers. Task identity is a feature-name slug, date-prefi
 
 ## Open questions
 
-None outstanding — all resolved during brainstorming. Flagging one item for awareness rather than as a blocker: `docs/.tasks/` task-plan authoring diverges from cairn's established "hard-required, never reimplemented" pattern (plan-writing wraps `superpowers:writing-plans`; `task-orchestrator` does not reuse it). This was a deliberate choice to keep parity with maestro's own T###-file shape rather than force coding-chain tasks through the architectural-spec pipeline — worth revisiting if the two planning formats ever want to converge.
+None outstanding — all resolved during brainstorming, including the plan-authoring duplication originally flagged here (see Plan Dedup above: `task-orchestrator` now hard-requires and reads `docs/.plans/<feature>.md` rather than re-authoring a second plan).

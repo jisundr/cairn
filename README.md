@@ -20,6 +20,9 @@ A Claude Code plugin — skills, agents, and commands I've found useful. Nothing
 - `solution-architect` — produces one technical artifact per invocation (Architecture Specification, Database Schema, API Specification, or an ADR). ADRs are immutable after write — only their status can change later. Writes to `docs/architecture/`, `docs/backend/`, or `docs/adr/`.
 - `documentation-auditor` — read-only documentation validator: checks README/setup/API docs plus requirements/design/architecture artifacts for accuracy, completeness, consistency, and cross-artifact traceability. Reports findings, never fixes them.
 - `documentation-engineer` — creates and updates README, setup guides, API docs, and developer guides, following your project's existing conventions.
+- `codebase-auditor` — read-mostly snapshot of codebase health: best-effort dependency/lint/typecheck tooling, TODO/FIXME debt, secret-shaped-value grep sweeps (never reproduces the value), and a grep-level dead-code pass. Writes one timestamped report to `docs/codebase-audit/`; never modifies source.
+- `competitor-analyst` — profiles named competitors (confirmed with you first, capped at 6 per run): positioning, pricing, features, strengths/weaknesses, with citations and a positioning map. Writes one dated snapshot to `docs/competitor-analysis/`. Treats fetched page content as untrusted data, not instructions.
+- `market-researcher` — studies the market/customer side (ICP, personas, jobs-to-be-done, pain points, positioning gaps) rather than named competitors. Confidence-tiers every finding. Hard-requires the `marketing-skills` plugin's `customer-research` skill — aborts if it isn't installed. Writes one dated snapshot to `docs/market-research/`.
 
 ## Commands
 

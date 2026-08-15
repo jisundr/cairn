@@ -2,8 +2,9 @@
 
 ## Summary
 
-Port five maestro agents into cairn to give it an actual implementation path — today cairn's writer agents (`requirements-engineer`, `product-designer`, `solution-architect`) stop at planning artifacts, and coding work runs through raw `superpowers` skills in the main thread with no dedicated agent roles:
+Port six maestro agents into cairn to give it an actual implementation path — today cairn's writer agents (`requirements-engineer`, `product-designer`, `solution-architect`) stop at planning artifacts, and coding work runs through raw `superpowers` skills in the main thread with no dedicated agent roles:
 
+- `project-manager` — decomposes a PRD into a local task list (`docs/.tasks/TRACKER.md`), sitting between requirements and implementation
 - `harness-engineer` — generates/updates `.harness/{architecture,standards,workflow}.md` from a codebase's own observed conventions
 - `task-orchestrator` — Plan Mode (task file + feasibility assessment + branch) and Publish Mode (commit + PR/MR)
 - `qa-engineer` — writes tests, TDD red phase (delegates TDD methodology to `superpowers:test-driven-development`)
@@ -12,11 +13,12 @@ Port five maestro agents into cairn to give it an actual implementation path —
 
 Plus one new command, `/cairn-run-task`, to create or resume a task directly.
 
-All five are new agent files under `agents/`. No existing agent file is modified — not even `intent-analyzer`, which stays category-only (see "Integration with existing cairn routing" below). Only `CLAUDE.md` changes, gaining the new agent roster entries and a documented coding-chain sequence, same pattern as the existing writer-trio "End-to-end sequence."
+All six are new agent files under `agents/`. No existing agent file is modified — not even `intent-analyzer`, which stays category-only (see "Integration with existing cairn routing" below). Only `CLAUDE.md` changes, gaining the new agent roster entries and a documented coding-chain sequence, same pattern as the existing writer-trio "End-to-end sequence."
 
 ## Source
 
-- `~/Projects/maestro/.claude/agents/{harness-engineer,task-orchestrator,qa-engineer,software-engineer,qa-auditor}.md`
+- `~/Projects/maestro/.claude/agents/{project-manager,harness-engineer,task-orchestrator,qa-engineer,software-engineer,qa-auditor}.md`
+- `~/Projects/maestro/.claude/skills/delivery-tracker/SKILL.md` (TRACKER.md format — local-only subset, see Task Decomposition below)
 - `~/Projects/maestro/.claude/skills/harness-rules-guide/SKILL.md`
 - `~/Projects/maestro/.claude/skills/coding-chain-guide/SKILL.md` (chain sequencing, fix-cycle routing — infra sections not ported, see below)
 
@@ -28,7 +30,8 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 | maestro infra | Why dropped |
 |---|---|
-| Tracker sync (`.tasks/TRACKER.md`, T### numbers, GitLab/ClickUp sync, `project-manager` agent) | External backend dependency; not needed once task identity is local |
+| GitLab/ClickUp sync itself (auth, MCP/CLI calls to an external backend) | Confirmed not needed — task identity and the task list both stay local (see Task Decomposition below); `project-manager` IS ported, but as a local-only decomposition agent, not a tracker-sync agent |
+| `delivery-tracker`'s `tracker.html` static kanban viewer | Real, self-contained, zero-dependency — but extra scope beyond what was asked; `docs/.tasks/TRACKER.md` stays a plain Markdown table for now, viewer is a clean future add-on if wanted |
 | `.codegraph/` MCP tool (call-site/blast-radius analysis) | Same precedent as `codebase-auditor`'s port — no codegraph dependency in cairn |
 | `swarm.sh` (tmux + detached unattended runs, `SWARM_STATE.md`) | No unattended mode in this design — chain runs in the current session like every other cairn agent, worktree isolation comes from `superpowers:using-git-worktrees` instead |
 | `.maestro/token-usage.db` MR token-usage section | cairn's usage tracking is the separate `/cairn-usage` dashboard, not per-task |
@@ -41,6 +44,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 | Agent | Model | Role | Terminal? |
 |---|---|---|---|
+| `project-manager` | sonnet | Decomposes `docs/requirements/prd.md` (+ `user-stories.md`) into task stubs, writes `docs/.tasks/TRACKER.md` (local index). Update Mode auto-syncs each row's status from its matching `docs/.tasks/YYYY-MM-DD-<slug>.md` Task State, if one exists | Terminal |
 | `harness-engineer` | sonnet | Generate/update `.harness/*.md` from observed conventions (or, on a fresh codebase, from a direct interview — see Fresh Codebase below), `AskUserQuestion` per-rule confirm gate, evidence-based by default, ~40-line cap per file | Terminal |
 | `task-orchestrator` | sonnet | Plan Mode: hard-requires `docs/.plans/<feature>.md` to exist (reads it as the plan, does not re-author it — see Plan Dedup below), create/resume `docs/.tasks/YYYY-MM-DD-<feature-slug>.md` as a thin layer over it (feasibility assessment + worktree/branch + Task State only), run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
 | `qa-engineer` | sonnet | Writes tests — pre-implementation (TDD red, hard-requires `superpowers:test-driven-development`) in the chain, or post-implementation in Direct Mode | Hands off |
@@ -103,6 +107,15 @@ No tracker, so no T### numbers. Task identity is a feature-name slug, date-prefi
 **`## Task State` section**, inside the task file, two parts:
 - `### Current` — overwritten by whichever agent just finished: phase, handoff target, status, worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — top of file, one glance shows where things stand.
 - `### History` — append-only, one summarized line per completed phase (not full detail — that lives in git history / actual test output).
+
+## Task decomposition (`project-manager`)
+
+Sits between requirements and implementation — the piece maestro's `intent-analyzer` doesn't need but cairn does, since cairn has no fixed roster telling Claude what to invoke next. Hard-requires `docs/requirements/prd.md` (Upstream Existence Check, same pattern used throughout); reads `user-stories.md` too if present, optional.
+
+- **Generate mode** (no `docs/.tasks/TRACKER.md` yet): reads the PRD, proposes a decomposition into discrete task stubs — one row per implementable unit of work, confirmed via `AskUserQuestion` before writing (same descriptive→prescriptive-style gate as `harness-engineer`, applied to task boundaries instead of code conventions). Writes `docs/.tasks/TRACKER.md`: one row per task — slug, one-line scope, status.
+- **Update mode** (`TRACKER.md` exists): diffs the current PRD against it — new requirements become new rows, nothing gets silently removed. Also resyncs every row's status by `Glob`-ing `docs/.tasks/` for a file matching that row's slug and reading its Task State `### Current` phase (`Not Started` if no matching file yet, `In Progress: <phase>` from `### Current`, `Published` once `task-orchestrator` Publish Mode completed it). Read-only against the per-task files — never writes into them, that's `task-orchestrator`'s territory.
+- Terminal — does not itself invoke `task-orchestrator`. A `TRACKER.md` row is picked up later, either via `/cairn-run-task <slug>` (see below) or a plain natural-language request naming the task — that's when the gate/`plan-writing`/`task-orchestrator` sequence actually runs for that one task.
+- `docs/.tasks/TRACKER.md`'s slugs are the same namespace `task-orchestrator` creates per-task files in (`docs/.tasks/YYYY-MM-DD-<slug>.md`) — a row's slug and its eventual task file's slug must match for status auto-sync to find it.
 
 **UAT checklist** — `task-orchestrator` Publish Mode generates a short manual-verification checklist from the task's scope, included in the PR/MR body. Kept from maestro; useful even solo as a pre-merge sanity pass.
 

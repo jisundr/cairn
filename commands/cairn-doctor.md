@@ -20,13 +20,13 @@ Run these checks in order and report a summary at the end. None of them are gate
    - Absent → report not wired. This is informational, not a problem — mention `/cairn-setup` if they want it, don't suggest anything's broken.
    - No `CLAUDE.md` at all → report not applicable.
 
-4. **`.cairn/` self-ignoring.** Only relevant if `.cairn/` exists in the project (created by `/cairn-usage` or the `log-version.sh` hook).
+4. **`.cairn/` self-ignoring.** Only relevant if `.cairn/` exists in the project (created by `/cairn-dashboard` or the `log-version.sh` hook).
    - `.cairn/.gitignore` exists and contains `*` → report it's correctly self-ignored.
    - Missing or wrong content → write a `.cairn/.gitignore` containing a single `*`, report that you fixed it. This never touches the project's own root `.gitignore` — `.cairn/` ignores itself.
    - `.cairn/` doesn't exist: nothing to do here.
 
 5. **Stale dashboard lockfile.** If `.cairn/usage-dashboard.pid` exists, check whether the PID in it is still alive.
    - Alive → report the dashboard is running, with its URL.
-   - Dead → remove the stale lockfile, report that you cleaned it up (otherwise `/cairn-usage` would think one's already running when it isn't).
+   - Dead → remove the stale lockfile, report that you cleaned it up (otherwise `/cairn-dashboard` would think one's already running when it isn't).
 
 6. **Summary.** One short report covering all five checks and what (if anything) was changed.

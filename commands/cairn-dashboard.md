@@ -1,11 +1,11 @@
 ---
-description: "Open a realtime local usage dashboard for this project — token/cost totals and a per-session table with the cairn version each session ran on. Requires /cairn-setup to have run first."
+description: "Open a realtime local usage dashboard for this project — token/cost totals, breakdowns by model/version/subagent/skill, a per-session table, and a task tracker tab. Requires /cairn-setup to have run first."
 argument-hint: "[stop]"
 ---
 
 ## Your task
 
-This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no dependencies) — it reads this project's session transcripts directly from `~/.claude/projects/`, so there's nothing to install or configure first. It does require the project to have run `/cairn-setup`, though — see step 1 below.
+This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no dependencies) — it reads this project's session transcripts directly from `~/.claude/projects/`, so there's nothing to install or configure first. It does require the project to have run `/cairn-setup`, though — see step 1 below. Its Tracker tab reads `docs/.tasks/TRACKER.md` if present (empty state if not — no dependency on `project-manager` having run).
 
 **If `$ARGUMENTS` is `stop`:**
 
@@ -23,7 +23,7 @@ This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no
 4. Create `.cairn/` in the project root if it doesn't exist, write the PID and URL to `.cairn/usage-dashboard.pid`.
 5. Ensure `.cairn/.gitignore` exists containing a single `*` — this makes the whole directory self-ignoring, so nothing under `.cairn/` needs the project's own root `.gitignore` touched at all.
 6. Open the URL in the user's browser.
-7. Report the dashboard URL, and that `/cairn-usage stop` shuts it down.
+7. Report the dashboard URL, and that `/cairn-dashboard stop` shuts it down.
 
 `stop` never requires setup — it's cleanup, always allowed, even if `/cairn-teardown` ran since the dashboard was started.
 

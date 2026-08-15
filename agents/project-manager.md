@@ -59,6 +59,7 @@ Terminal — does not itself invoke `task-orchestrator` or any writer agent. A `
 - NEVER silently remove a row during an Update mode diff. New PRD-derived requirements become new `Idea` rows; hand-authored `Idea` rows (no PRD trace) are left untouched, never diffed away.
 - NEVER require a hand-authored `Idea` row to trace back to a PRD requirement — only PRD-derived rows go through the diff logic.
 - Status is always derived, never hand-set: from the row's linked ticket if one exists (authoritative), else from `Glob`-ing `docs/.tasks/` for a matching `STATE.md` phase. Never accept or preserve a manually-typed Status value found in the table — overwrite it on the next sync.
+- Milestone is the opposite of Status: never auto-derived or resynced. Propose it at the same confirm gate as the row (Generate/Update), then leave it alone — a hand-edited Milestone value is never overwritten.
 - Ticket Sync is additive only — when neither GitHub/GitLab nor ClickUp is configured, degrade silently to fully-local behavior. Never error or block on a missing backend.
 - Must run in the main thread for Generate mode's confirm gate — the gate depends on live `AskUserQuestion`, which a background subagent cannot use.
 
@@ -86,16 +87,17 @@ Terminal — does not itself invoke `task-orchestrator` or any writer agent. A `
 
 1. **Determine granularity.** If `user-stories.md` exists: one row per user story (a user story is already sized right for one branch/PR/TDD-cycle, and `documentation-auditor` already traces every PRD `FR-###` to a user story, so the atomic boundary is already vetted). If it does not exist: one row per PRD feature/epic section.
 2. **Propose the decomposition.** For each unit at the chosen granularity, draft a task stub: a slug (kebab-case, matching the namespace `task-orchestrator` will later create folders in — `docs/.tasks/YYYY-MM-DD-<slug>/`) and a one-line scope description.
-3. **Confirm before writing.** Present the full proposed row set via `AskUserQuestion` — a per-row (or batched) confirm/edit/drop decision. Never write `docs/.tasks/TRACKER.md` before this gate is answered.
-4. **Write the file**, seeded from `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/TRACKER.template.md` (`${CLAUDE_PLUGIN_ROOT}` is the plugin's own install location — a bare `skills/...` path would resolve against the consuming project's cwd and fail): one row per confirmed task — Slug, Scope, Status `Idea`, Ticket `—`, Task File `—`. Task File stays `—` here; no task folder exists until `task-orchestrator` creates one, and Update mode fills the column in then (Step 4.2).
+3. **Propose milestones.** cairn's requirements docs have no built-in epic/feature grouping to derive this from, so propose a small set of milestones yourself (group the drafted stubs by theme, sequence, or release — whatever grouping actually reads as natural for this PRD) and assign each stub to one. A stub that doesn't fit any group stays ungrouped (`—`) rather than forced into a poor-fit milestone — never invent a milestone with only one straggler row just to avoid a `—`.
+4. **Confirm before writing.** Present the full proposed row set — including each row's proposed milestone — via `AskUserQuestion`: a per-row (or batched) confirm/edit/drop decision, plus the freedom to rename, merge, split, or reassign milestones. Never write `docs/.tasks/TRACKER.md` before this gate is answered.
+5. **Write the file**, seeded from `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/TRACKER.template.md` (`${CLAUDE_PLUGIN_ROOT}` is the plugin's own install location — a bare `skills/...` path would resolve against the consuming project's cwd and fail): one row per confirmed task — Slug, Milestone (confirmed value or `—`), Scope, Status `Idea`, Ticket `—`, Task File `—`. Task File stays `—` here; no task folder exists until `task-orchestrator` creates one, and Update mode fills the column in then (Step 4.2).
 
-Rows can also be hand-authored directly in the table after this — never require a hand-authored `Idea` row to trace back to a PRD requirement.
+Rows can also be hand-authored directly in the table after this — never require a hand-authored `Idea` row to trace back to a PRD requirement. Milestone is likewise freely hand-editable at any time — unlike Status, it is never auto-resynced or overwritten once written.
 
 ### Step 4 — Update mode
 
 1. **Diff.** Re-derive the current decomposition from the PRD (and `user-stories.md` if present) using the same granularity rule as Step 3. Compare against existing rows:
-   - New PRD-derived unit with no matching row → propose as a new `Idea` row (confirm via `AskUserQuestion`, same gate as Generate mode).
-   - Existing PRD-derived row still present → leave as-is (Status resync happens separately, below).
+   - New PRD-derived unit with no matching row → propose as a new `Idea` row, including a proposed Milestone — reuse one of the table's existing milestone labels where it fits, otherwise propose a new one or `—` (confirm via `AskUserQuestion`, same gate as Generate mode).
+   - Existing PRD-derived row still present → leave as-is, Milestone included (Status resync happens separately, below; Milestone is never touched by the diff — it's a hand-editable field, not PRD-derived).
    - Hand-authored row with no PRD trace → leave untouched, never diffed away, never flagged as stale.
    - Nothing is ever silently removed.
 2. **Resync Status** for every row:
@@ -184,7 +186,7 @@ Result
 0. **Entry point check.** Is this invocation a targeted status-flip call — carrying a slug and a target status, not a "decompose the PRD" or "sync the tracker" request (e.g. `task-orchestrator` invoking this agent at a chain checkpoint)? → **Status Sync**: skip the Upstream Existence Check and Generate/Update mode detection entirely. Locate the row by slug in `docs/.tasks/TRACKER.md`, perform the status flip per TICKET SYNC's "Status flips" subsection (ticket write if a backend is configured, `TRACKER.md` Status column update either way, plus the `Task File` column if a matching task folder now exists and the column is still `—`), then emit **PROJECT MANAGER COMPLETE** with Mode `Status Sync` and STOP. Otherwise, continue to Step 1.
 1. `Glob(docs/requirements/prd.md)` — Upstream Existence Check (Step 1). Terminate if absent.
 2. `Glob(docs/.tasks/TRACKER.md)` to determine Generate vs. Update mode (Step 2).
-3. Generate mode: determine granularity, propose the decomposition, confirm via `AskUserQuestion`, write the seeded table (Step 3).
-   Update mode: diff the PRD, confirm any new rows, resync every row's Status, run Ticket Sync where applicable (Step 4).
+3. Generate mode: determine granularity, propose the decomposition and milestones, confirm via `AskUserQuestion`, write the seeded table (Step 3).
+   Update mode: diff the PRD, confirm any new rows (with proposed milestones), resync every row's Status, run Ticket Sync where applicable (Step 4).
 4. `Write`/`Edit` `docs/.tasks/TRACKER.md` (and `docs/.plans/<slug>.md`'s `Ticket:` line, when a ticket was created/synced).
 5. Emit **PROJECT MANAGER COMPLETE** + Result block — terminal, no handoff.

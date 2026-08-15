@@ -129,3 +129,182 @@ def test_sessions_sorted_newest_first(tmp_path):
     result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
 
     assert [s["session_id"] for s in result["sessions"]] == ["session-new", "session-old"]
+
+
+def test_calc_cost_known_model():
+    usage = {
+        "input_tokens": 1_000_000,
+        "output_tokens": 1_000_000,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+    }
+    rate = usage_dashboard.MODEL_PRICING["claude-sonnet-5"]
+    expected = rate["input"] + rate["output"]
+    assert usage_dashboard.calc_cost("claude-sonnet-5", usage) == pytest.approx(expected)
+
+
+def test_calc_cost_includes_cache_rates():
+    usage = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 1_000_000,
+        "cache_read_input_tokens": 1_000_000,
+    }
+    rate = usage_dashboard.MODEL_PRICING["claude-sonnet-5"]
+    expected = rate["cache_write"] + rate["cache_read"]
+    assert usage_dashboard.calc_cost("claude-sonnet-5", usage) == pytest.approx(expected)
+
+
+def test_calc_cost_unknown_model_returns_none():
+    usage = {"input_tokens": 100, "output_tokens": 100, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
+    assert usage_dashboard.calc_cost("some-unreleased-model", usage) is None
+
+
+def test_aggregate_usage_computes_session_cost_and_flags_unpriced(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    _write_session(transcripts_dir, "session-priced", [
+        _assistant_line("2026-08-14T01:00:00Z", "claude-sonnet-5", input_tokens=1_000_000, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+    ])
+    _write_session(transcripts_dir, "session-unpriced", [
+        _assistant_line("2026-08-14T02:00:00Z", "some-unreleased-model"),
+    ])
+
+    result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
+    by_id = {s["session_id"]: s for s in result["sessions"]}
+
+    rate = usage_dashboard.MODEL_PRICING["claude-sonnet-5"]
+    assert by_id["session-priced"]["cost"] == pytest.approx(rate["input"])
+    assert by_id["session-priced"]["unpriced_calls"] == 0
+
+    assert by_id["session-unpriced"]["cost"] == 0
+    assert by_id["session-unpriced"]["unpriced_calls"] == 1
+
+    assert result["totals"]["cost"] == pytest.approx(rate["input"])
+    assert result["totals"]["unpriced_calls"] == 1
+
+
+def test_aggregate_by_model(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    _write_session(transcripts_dir, "session-a", [
+        _assistant_line("2026-08-14T01:00:00Z", "claude-sonnet-5", input_tokens=10, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+    ])
+    _write_session(transcripts_dir, "session-b", [
+        _assistant_line("2026-08-14T02:00:00Z", "claude-haiku-4-5", input_tokens=20, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+        _assistant_line("2026-08-14T02:01:00Z", "claude-sonnet-5", input_tokens=5, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+    ])
+
+    result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
+    by_model = {row["model"]: row for row in result["by_model"]}
+
+    assert by_model["claude-sonnet-5"]["input_tokens"] == 15
+    assert by_model["claude-sonnet-5"]["calls"] == 2
+    assert by_model["claude-haiku-4-5"]["input_tokens"] == 20
+    assert by_model["claude-haiku-4-5"]["calls"] == 1
+
+
+def test_aggregate_by_version(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    _write_session(transcripts_dir, "session-a", [_assistant_line("2026-08-14T01:00:00Z", "claude-sonnet-5")])
+    _write_session(transcripts_dir, "session-b", [_assistant_line("2026-08-14T02:00:00Z", "claude-sonnet-5")])
+
+    cairn_dir = cwd / ".cairn"
+    cairn_dir.mkdir()
+    (cairn_dir / "version-log.jsonl").write_text(
+        "\n".join([
+            json.dumps({"session_id": "session-a", "timestamp": "2026-08-14T01:00:00Z", "version": "0.9.0"}),
+            json.dumps({"session_id": "session-b", "timestamp": "2026-08-14T02:00:00Z", "version": "0.10.0"}),
+        ]) + "\n"
+    )
+
+    result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
+    by_version = {row["version"]: row for row in result["by_version"]}
+
+    assert by_version["0.9.0"]["calls"] == 1
+    assert by_version["0.10.0"]["calls"] == 1
+
+
+def test_subagent_and_skill_calls_counted(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    line = json.dumps({
+        "type": "assistant",
+        "timestamp": "2026-08-14T01:00:00Z",
+        "message": {
+            "model": "claude-sonnet-5",
+            "usage": {"input_tokens": 1, "output_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            "content": [
+                {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "cairn:intent-analyzer"}},
+                {"type": "tool_use", "name": "Skill", "input": {"skill": "cairn:spec-writing"}},
+                {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "cairn:intent-analyzer"}},
+            ],
+        },
+    })
+    _write_session(transcripts_dir, "session-a", [line])
+
+    result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
+    by_subagent = {row["name"]: row["calls"] for row in result["by_subagent"]}
+    by_skill = {row["name"]: row["calls"] for row in result["by_skill"]}
+
+    assert by_subagent["cairn:intent-analyzer"] == 2
+    assert by_skill["cairn:spec-writing"] == 1
+
+
+def test_parse_tracker_md_parses_rows_with_milestone(tmp_path):
+    tracker = tmp_path / "TRACKER.md"
+    tracker.write_text(
+        "# Task Tracker\n\n"
+        "| Slug | Milestone | Scope | Status | Ticket | Task File |\n"
+        "|---|---|---|---|---|---|\n"
+        "| add-auth | v1 launch | Add login flow | In Progress: QA-RED | #42 | docs/.tasks/2026-08-14-add-auth |\n"
+        "| — | — | [one-line scope, from a user story or PRD feature] | Idea | — | — |\n"
+    )
+
+    rows = usage_dashboard.parse_tracker_md(tracker)
+
+    assert len(rows) == 1
+    assert rows[0] == {
+        "slug": "add-auth",
+        "milestone": "v1 launch",
+        "scope": "Add login flow",
+        "status": "In Progress: QA-RED",
+        "ticket": "#42",
+        "task_file": "docs/.tasks/2026-08-14-add-auth",
+    }
+
+
+def test_parse_tracker_md_legacy_table_without_milestone_column(tmp_path):
+    tracker = tmp_path / "TRACKER.md"
+    tracker.write_text(
+        "# Task Tracker\n\n"
+        "| Slug | Scope | Status | Ticket | Task File |\n"
+        "|---|---|---|---|---|\n"
+        "| add-auth | Add login flow | Idea | — | — |\n"
+    )
+
+    rows = usage_dashboard.parse_tracker_md(tracker)
+
+    assert rows[0]["milestone"] == "—"
+    assert rows[0]["slug"] == "add-auth"
+
+
+def test_parse_tracker_md_missing_file_returns_empty(tmp_path):
+    assert usage_dashboard.parse_tracker_md(tmp_path / "nope.md") == []

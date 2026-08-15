@@ -93,7 +93,7 @@ Determine once, before Step 5, whether this task is UI-facing — never re-evalu
 - **Chain mode:** the plan (`docs/.plans/<slug>.md`, already read in Step 2) describes UI/frontend/component/visual/interaction work, or names `docs/design/ui-layout-spec.md` / `docs/design/design-system.md` as source material.
 - **Direct mode:** the opening request's wording is UI-facing, or the files it names/implies match UI file types (`.tsx`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, template/markup files).
 
-If not UI-facing, skip this step entirely and proceed to Step 5.
+If not UI-facing, skip this step entirely and proceed to the next step (Step 4 in Direct mode, Step 5 in Chain mode).
 
 If UI-facing, run each of the following independently — none blocks the others, all skip silently on failure/absence:
 
@@ -101,7 +101,7 @@ If UI-facing, run each of the following independently — none blocks the others
 2. Attempt `Skill(skill: "taste-skill:design-taste-frontend")` (Taste Skill). On failure, skip silently. Apply its direction only where its own stated scope fits (landing/portfolio/marketing-style UI, not dashboards/data tables/multi-step product flows) — judgment call, not a hard filter.
 3. `Glob(.claude/skills/emil-design-eng/SKILL.md)`. If present, `Read` it, and `Read` any of its 9 sibling skills (`animate`, `review-animations`, `improve-animations`, `find-animation-opportunities`, `animation-vocabulary`, `apple-design`, `pick-ui-library`, `prototype`, `ask-sonner`, all vendored alongside it under `.claude/skills/`) relevant to the specific work at hand — e.g. `animate` when building a new animation, `review-animations` as a self-check once animation code is written. If absent, skip silently.
 
-If none of the three are present, this step is a no-op — proceed to Step 5 exactly as if it hadn't been UI-facing. Never emit a `HARNESS FLAG:` for a missing skill here — that mechanism is for undocumented codebase conventions, not third-party skill availability.
+If none of the three are present, this step is a no-op — proceed to the next step (Step 4 in Direct mode, Step 5 in Chain mode) exactly as if it hadn't been UI-facing. Never emit a `HARNESS FLAG:` for a missing skill here — that mechanism is for undocumented codebase conventions, not third-party skill availability.
 
 ### Step 4 — Direct mode: load context
 

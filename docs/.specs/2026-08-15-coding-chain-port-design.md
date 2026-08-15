@@ -56,7 +56,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 **Direct** (bug-fix/decision — matches intent-analyzer's existing Brainstorming-Gate-skip signal): `software-engineer` (Direct Mode, works on current branch, no automated commit/PR) → `qa-engineer` (tests written post-hoc) → done. No task file, no task-orchestrator, no branch automation.
 
-**Chain** (new-feature/refactor — gate fires, planning already happened upstream): `task-orchestrator` (Plan) → `qa-engineer` (red) → `software-engineer` (green) → `qa-auditor` → `task-orchestrator` (Publish).
+**Chain** (new-feature/refactor — gate fires, planning already happened upstream): `task-orchestrator` (Plan) → `documentation-auditor` (Doc Gate) → `qa-engineer` (red) → `software-engineer` (green) → `qa-auditor` → `documentation-auditor` (Doc Post-Impl) → `task-orchestrator` (Publish). See Documentation Gates below.
 
 Fix-cycle routing carries over from maestro unchanged: `qa-auditor` routes test issues back to `qa-engineer`, implementation bugs and HIGH+ security/perf/dependency findings to `software-engineer`.
 
@@ -79,7 +79,7 @@ Matches maestro's pattern — `Glob`-check before loading, skip silently if `.ha
 - `qa-engineer` → `standards.md`'s `## Testing` section
 - `qa-auditor` → `architecture.md` + `standards.md`, raises a HIGH finding (routed to `software-engineer`) on task-introduced violations only
 
-**Drift flagging:** `software-engineer`, `qa-engineer`, `qa-auditor` may each emit an optional `HARNESS FLAG:` note in their handoff output when they introduce/observe a pattern not covered by any existing `.harness/` rule (distinct from a violation — those go through `qa-auditor`'s HIGH-finding path above). `task-orchestrator` collects these across the chain and surfaces one consolidated `AskUserQuestion` at Publish Mode: run `harness-engineer` Update mode before publishing, or skip and publish as-is. `harness-engineer` still runs its own per-rule confirm gate when invoked — this is only the trigger.
+**Drift flagging:** `software-engineer`, `qa-engineer`, `qa-auditor` may each emit an optional `HARNESS FLAG:` note in their handoff output when they introduce/observe a pattern not covered by any existing `.harness/` rule (distinct from a violation — those go through `qa-auditor`'s HIGH-finding path above). `task-orchestrator` collects these across the chain and surfaces one consolidated `AskUserQuestion` at Publish Mode — alongside `documentation-auditor`'s Doc Post-Impl findings, see Documentation Gates below, same prompt: run `harness-engineer` Update mode, run `documentation-engineer` for doc drift, both, or skip and publish as-is. `harness-engineer` still runs its own per-rule confirm gate when invoked — this is only the trigger.
 
 `harness-engineer` is also invocable standalone at any time, and auto-suggested by `task-orchestrator` Plan Mode on first run if `.harness/` is absent entirely.
 
@@ -112,6 +112,16 @@ No tracker, so no T### numbers. Task identity is a feature-name slug, date-prefi
 One nuance this resolves: `writing-plans`' own plan template carries a `REQUIRED SUB-SKILL: superpowers:subagent-driven-development or superpowers:executing-plans` header and an Execution Handoff step asking the user to choose between them — neither of which is `task-orchestrator`'s chain. No change to `plan-writing`/`writing-plans` is needed to resolve this: plan *creation* and task *execution* are two separate, explicitly user-triggered actions in this design (per Task Decomposition below — a user picks a `TRACKER.md` row and asks for a plan; running the task is a distinct later request). Whatever `plan-writing`'s own Execution Handoff dialogue suggests is simply not acted on in the coding-chain context — the user's subsequent "run this task" (or `/cairn-run-task`) request is what invokes `task-orchestrator` directly, superseding it. `docs/.plans/<feature>.md` stays static reference material once written; `superpowers:executing-plans` is never invoked for Chain flow.
 
 **`STATE.md`** (inside the task folder) — overwritten by whichever agent just finished: phase, handoff target, status, a `Plan:` pointer to the `docs/.plans/` file this task tracks (see Templates below), worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — one glance shows where things stand. `HISTORY.md`, alongside it, is the append-only log: one summarized line per completed phase (not full detail — that lives in git history / actual test output).
+
+**Phase values:** `PLAN` · `DOC-GATE` · `QA-RED` · `IMPLEMENT` · `QA-AUDIT` · `DOC-POST-IMPL` · `PUBLISH` — one per chain agent invocation, in order (see Documentation Gates below for the two `DOC-*` phases). Plus `HANDOFF NEEDED` as a pause state, unattended-only (see Unattended Execution below).
+
+## Documentation gates
+
+Matches maestro's `DOC PASS` phase, but as two invocations of the existing `documentation-auditor` — no new agent, no changes to `agents/documentation-auditor.md`. This is a deliberate, scoped exception to that agent's "never automatically after a write" convention, specific to the coding chain (its manual/on-demand use everywhere else in cairn is unaffected).
+
+- **Doc Gate** (right after `task-orchestrator` Plan, before `qa-engineer` starts): checks whether the plan's scope will require doc updates, against what already exists. Read-only, reports findings only, same as always. A HIGH-severity finding (plan contradicts existing docs, or depends on a doc that isn't there) surfaces via `AskUserQuestion` before continuing — proceed anyway, or stop and fix upstream docs first. Anything lower severity just gets noted in `STATE.md`'s `Key info` and the chain continues.
+- **Doc Post-Impl** (after `qa-auditor`, before Publish): checks docs (README/setup/API/dev-guides) against what actually got built. Findings don't block or auto-fix (`documentation-auditor` never invokes a writer agent itself) — they fold into the *same* consolidated `AskUserQuestion` `task-orchestrator` already surfaces at Publish for harness-drift flags: run `documentation-engineer` to fix doc drift, run `harness-engineer` Update mode for harness drift, both, or skip and publish as-is.
+- Maestro's per-submodule README/CLAUDE.md auto-write and `LEARNINGS:` merge at this step are dropped — the former would require `documentation-auditor` to write, which it doesn't do in cairn; the latter's merge mechanic doesn't exist here at all (already dropped, see Scope decision).
 
 ## Submodules
 

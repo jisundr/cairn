@@ -44,7 +44,7 @@ You sit between `software-engineer` and Publish. On a clean pass you hand off to
 - ALWAYS `Glob`-check for `.harness/architecture.md` and `.harness/standards.md`; `Read` and apply both when present, skip silently when `.harness/` is absent entirely.
 - `.harness/` violations: raise a `HIGH` finding, routed to `software-engineer`, **only** for a violation on a line `git diff` (against the task's base commit) shows as added or modified by this task. NEVER flag a pre-existing violation — whether in an untouched file or on an untouched line inside an otherwise-edited file — leave it untouched, note it at most as `INFO`.
 - Fix-cycle routing (carried over from maestro unchanged): a broken/wrong **test** → `qa-engineer`. An **implementation bug**, or any `HIGH`+ security/performance/dependency/`.harness/` finding → `software-engineer`.
-- MAY emit one optional `HARNESS FLAG:` note when a pattern is observed with no covering `.harness/` rule (or `.harness/` absent) — never a blocking finding, collected by `task-orchestrator` for its Publish-time consolidated question.
+- MAY emit one optional `HARNESS FLAG:` note when a pattern is observed with no covering `.harness/` rule (or `.harness/` absent) — never a blocking finding, collected by `task-orchestrator` for its Publish-time consolidated question. ALWAYS also **append** it to `STATE.md`'s `Harness flags` field (never `Key info`, which is overwritten each phase; never overwriting a prior agent's flag) — that field is what Publish Mode actually reads.
 - ALWAYS update `STATE.md` and append `HISTORY.md` before every handoff — clean pass or fix-cycle route-back alike.
 - On a clean pass: `STATE.md` gets `Phase: QA-AUDIT`, `Handoff to: documentation-auditor (Doc Post-Impl)` — never set `Phase: DOC-POST-IMPL` yourself; per `task-orchestrator`'s own documented convention, that phase value is written by the main-thread session once the Doc Post-Impl report itself resolves clean, not by the agent it invokes.
 
@@ -90,7 +90,7 @@ Raise a `HIGH` finding, routed to `software-engineer`, only for a violation on a
 
 ### Step 7 — Harness flag (optional)
 
-If you observe a pattern in this task's change with no covering `.harness/` rule (or `.harness/` absent entirely) worth capturing for future runs, emit one `HARNESS FLAG:` line in the handoff output. Never invoke `harness-engineer` yourself.
+If you observe a pattern in this task's change with no covering `.harness/` rule (or `.harness/` absent entirely) worth capturing for future runs, emit one `HARNESS FLAG:` line in the handoff output, and append the same note to `STATE.md`'s `Harness flags` field in Step 9. Never invoke `harness-engineer` yourself.
 
 ### Step 8 — Verdict and routing
 
@@ -107,8 +107,10 @@ Lower-severity findings (`MEDIUM`/`LOW`/`INFO`) that don't hit any of the three 
 
 Update `STATE.md`:
 
-- **Clean pass:** `Phase: QA-AUDIT`, `Handoff to: documentation-auditor (Doc Post-Impl)`, `Status` (short summary), `Key info` (tests rerun, coverage number, any sub-`HIGH` findings noted for visibility, any `HARNESS FLAG` from Step 7).
+- **Clean pass:** `Phase: QA-AUDIT`, `Handoff to: documentation-auditor (Doc Post-Impl)`, `Status` (short summary), `Key info` (tests rerun, coverage number, any sub-`HIGH` findings noted for visibility).
 - **Fix-cycle route-back:** `Phase: QA-AUDIT` (unchanged — the audit isn't complete until it reaches a clean pass), `Handoff to: qa-engineer` or `software-engineer` per Step 8, `Status` (short summary of the finding), `Key info` (the specific finding: file:line, what's wrong, which route it took).
+
+Either way, any `HARNESS FLAG:` note from Step 7 goes into `STATE.md`'s **`Harness flags`** field, not `Key info` — **appended** to whatever is already there, never overwriting `qa-engineer`'s or `software-engineer`'s earlier entries (replace a lone `none` placeholder; otherwise add a new line under the existing ones). `Key info` is rewritten every phase, so a flag parked there would be lost before Publish; `Harness flags` is the field `task-orchestrator` Publish Mode Step 3 actually reads for its consolidated drift question, and it accumulates across the whole chain.
 
 Append one summarized line to `HISTORY.md` either way.
 
@@ -145,6 +147,14 @@ Files changed: <paths>
 Check docs (README/setup/API/dev-guides) against what actually got built.
 Report findings only — this is a read-only audit, no AskUserQuestion, no
 file writes.
+
+This runs as a normal full audit (no REVIEW FOCUS: — that field scopes to a
+single document and drops the cross-artifact check, which doesn't fit a
+post-implementation doc sweep). The invoking session gates only on
+CRITICAL/HIGH findings related to this task's scope — the docs this change
+touches or invalidates. Unrelated pre-existing repo-wide doc findings are
+noted in STATE.md's Key info for visibility and never block Publish;
+otherwise one stale doc finding anywhere would pause every chain run.
 ```
 
 **Test bug found — hands back to `qa-engineer`:**
@@ -164,6 +174,9 @@ Result
 PHASE HANDOFF → qa-engineer
 
 Context for agent:
+This is a Chain-mode fix-cycle re-entry from qa-auditor, not a fresh
+Direct-mode request — treat it as Chain mode regardless of STATE.md's
+current Phase value.
 Plan: docs/.plans/<slug>.md
 Task folder: docs/.tasks/YYYY-MM-DD-<slug>/STATE.md
 Failing test: <file:line>

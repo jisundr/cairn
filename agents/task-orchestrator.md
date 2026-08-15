@@ -77,11 +77,11 @@ Same "documented sequence, not automated" pattern as cairn's existing writer-tri
 
 ### Step 2 — Task folder resolution
 
-Read the template assets used below directly by path — `Read` on `skills/coding-chain-shared/assets/task/{STATE,HISTORY,UAT}.template.md` — same convention `harness-engineer`/`project-manager` use for their own shared templates, not a `Skill()` call.
+Read the template assets used below directly by path — `Read` on `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/task/{STATE,HISTORY,UAT}.template.md` — same convention `harness-engineer`/`project-manager` use for their own shared templates, not a `Skill()` call. `${CLAUDE_PLUGIN_ROOT}` is the plugin's own install location; a bare `skills/...` path would resolve against the consuming project's cwd and fail.
 
 - If opening context already names an existing task folder to resume (e.g. a prior invocation, or `/cairn-run-task` resolving to one) → read its `STATE.md`, continue from its recorded `Phase`, `Worktree`, and `Branch` rather than recreating anything. Skip to whichever step matches that phase.
 - Otherwise this is a fresh start. `Glob(docs/.tasks/YYYY-MM-DD-<slug>/)` for **today's** date. If a folder already exists for today + this slug → **same-day slug collision**: ask via `AskUserQuestion` (Attended) / set `HANDOFF NEEDED` (Unattended) — resume the existing folder, or pick a new slug (loop back to Step 1 with the new slug, since it must match a `docs/.plans/` file too).
-- If nothing found, create `docs/.tasks/YYYY-MM-DD-<slug>/`, seeded from `skills/coding-chain-shared/assets/task/{STATE,HISTORY,UAT}.template.md`.
+- If nothing found, create `docs/.tasks/YYYY-MM-DD-<slug>/`, seeded from `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/task/{STATE,HISTORY,UAT}.template.md`.
 
 ### Step 3 — Submodule scope detection
 
@@ -101,7 +101,20 @@ If `.harness/` is absent **entirely** (no directory at all, not just a missing `
 
 ### Step 7 — Feasibility assessment
 
-Invoke `qa-engineer` and `software-engineer` — each independently assesses test/implementation feasibility against the plan. No files are written by either at this point; collect both verdicts before continuing. A hard blocker from either (plan is not implementable as written) surfaces via `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): revise the plan first, or proceed anyway and let the chain surface it again downstream.
+Invoke `qa-engineer` and `software-engineer` at their **Feasibility Assessment mode** — each independently assesses test/implementation feasibility against the plan.
+
+`STATE.md` does not exist yet at this point (it's written at Step 9), so pass the plan path **directly in the opening context** — never tell either agent to read `STATE.md` for it. State explicitly that this is a Feasibility Assessment: read-only, no files written, no worktree to `cd` into, verdict returned as text. Both agents document this mode; they hard-require `STATE.md` only in Chain mode, which this is not.
+
+```
+FEASIBILITY ASSESSMENT (no files written)
+Plan: docs/.plans/<file>.md
+
+Read the plan and return a feasibility verdict only. STATE.md does not
+exist yet — do not look for a task folder or a worktree, and do not
+write, edit, or run anything.
+```
+
+Collect both verdicts before continuing. A hard blocker from either (plan is not implementable as written) surfaces via `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): revise the plan first, or proceed anyway and let the chain surface it again downstream.
 
 ### Step 8 — Attended/Unattended selection
 
@@ -113,11 +126,15 @@ Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentatio
 
 ### Step 10 — Ticket sync (In Progress)
 
-If a ticket sync backend is active for this slug (a Ticket URL exists in `docs/.tasks/TRACKER.md`'s matching row): invoke `project-manager` at its **Status Sync** entry point with `slug` + target status `In Progress` — a narrow status-flip call, not a full PRD decomposition or Generate/Update mode run. If no ticket sync is configured, proceed local-only; this is the default unconfigured state, not an error.
+If a ticket sync backend is active for this slug (a Ticket URL exists in `docs/.tasks/TRACKER.md`'s matching row): invoke `project-manager` at its **Status Sync** entry point with `slug` + target status `In Progress: PLAN` — the phase-qualified form is the canonical vocabulary (`skills/coding-chain-shared/SKILL.md`), not a bare `In Progress`. A narrow status-flip call, not a full PRD decomposition or Generate/Update mode run. If no ticket sync is configured, proceed local-only; this is the default unconfigured state, not an error.
 
 ### Step 11 — Hand off to documentation-auditor (Doc Gate)
 
-Hand off to `documentation-auditor` — **not** directly to `qa-engineer`. Doc Gate checks whether the plan's scope requires doc updates against what already exists; read-only, findings only, same as every other `documentation-auditor` invocation. `documentation-auditor` itself never writes anything and never asks a question — it only reports findings (`tools: Read, Glob, Grep`). Acting on its report is the invoking main-thread session's job, not `documentation-auditor`'s own: it sets `STATE.md`'s `Phase: DOC-GATE` when it invokes `documentation-auditor`, then, if the report contains a HIGH-severity finding (plan contradicts existing docs, or depends on a doc that isn't there), confirms via `AskUserQuestion` (Attended) / sets `HANDOFF NEEDED` on `STATE.md` (Unattended) — proceed anyway, or stop and fix upstream docs first. Either way, once Doc Gate is resolved (clean report, or a HIGH finding confirmed proceed-anyway), that same main-thread session — following this agent's own instructions, not a new `task-orchestrator` invocation — moves `STATE.md`'s `Phase` straight to `QA-RED` as `qa-engineer` starts (Doc Gate's own phase is transient, no lingering "clean" state — it's not what Publish Mode's detection looks for, see below); anything lower severity is simply noted in `STATE.md`'s `Key info` at that same edit, with no question needed.
+Hand off to `documentation-auditor` — **not** directly to `qa-engineer`. Doc Gate checks whether the plan's scope requires doc updates against what already exists; read-only, findings only, same as every other `documentation-auditor` invocation. `documentation-auditor` itself never writes anything and never asks a question — it only reports findings (`tools: Read, Glob, Grep`). Acting on its report is the invoking main-thread session's job, not `documentation-auditor`'s own: it sets `STATE.md`'s `Phase: DOC-GATE` when it invokes `documentation-auditor`, then, if the report contains a **CRITICAL or HIGH** finding (plan contradicts existing docs, or depends on a doc that isn't there), confirms via `AskUserQuestion` (Attended) / sets `HANDOFF NEEDED` on `STATE.md` (Unattended) — proceed anyway, or stop and fix upstream docs first.
+
+**Scope the gate to this task.** `documentation-auditor` has no way to scope an audit to "everything this task touches" — its `REVIEW FOCUS:` field takes a single document path and suppresses the cross-artifact check, which is the wrong shape for a Doc Gate — so it runs its full audit across the whole repo every time. That means its report will routinely contain CRITICAL/HIGH findings that have nothing to do with this task. Gate **only** on findings that relate to the plan's actual scope (the docs the plan touches, contradicts, or depends on). Unrelated pre-existing findings are noted in `Key info` for visibility and never block the chain — otherwise any repo carrying one stale doc finding would pause every run.
+
+Either way, once Doc Gate is resolved (clean report, or an in-scope CRITICAL/HIGH finding confirmed proceed-anyway), that same main-thread session — following this agent's own instructions, not a new `task-orchestrator` invocation — moves `STATE.md`'s `Phase` straight to `QA-RED` **and `Handoff to: qa-engineer`** as `qa-engineer` starts (Doc Gate's own phase is transient, no lingering "clean" state — it's not what Publish Mode's detection looks for, see below); anything lower severity is simply noted in `STATE.md`'s `Key info` at that same edit, with no question needed.
 
 **Unattended branch.** If Step 8 selected Unattended, do not wait for this handoff to be picked up in the current (attended) session. Instead: launch a detached run — `tmux new-session -d -s <branch> '<cd into the worktree, then continue the chain: Doc Gate → qa-engineer → software-engineer → qa-auditor → Doc Post-Impl → Publish>'`. The rest of the chain, including this agent's own eventual Publish Mode run, happens inside that detached session, following the exact same `STATE.md`/`HISTORY.md` protocol. This attended turn ends by reporting the launch (see PHASE HANDOFF) rather than the normal Doc Gate handoff text.
 
@@ -125,7 +142,7 @@ Hand off to `documentation-auditor` — **not** directly to `qa-engineer`. Doc G
 
 ## PUBLISH MODE
 
-Triggered after `qa-auditor` → `documentation-auditor` (Doc Post-Impl) hands off clean. Same ownership split as Doc Gate (PLAN MODE Step 11): `documentation-auditor` only reports Doc Post-Impl findings, never writes files or asks questions. The main-thread session that invoked it is what updates `STATE.md`'s `Phase` to `DOC-POST-IMPL` once the report is resolved (clean, or a HIGH finding confirmed proceed-anyway) — that's the signal this agent's own Publish Mode START detection looks for, unlike Doc Gate's own phase above, which is transient and never persists as a detection trigger.
+Triggered after `qa-auditor` → `documentation-auditor` (Doc Post-Impl) hands off clean. Same ownership split as Doc Gate (PLAN MODE Step 11): `documentation-auditor` only reports Doc Post-Impl findings, never writes files or asks questions. The main-thread session that invoked it is what updates `STATE.md`'s `Phase` to `DOC-POST-IMPL` once the report is resolved (clean, or an in-scope CRITICAL/HIGH finding confirmed proceed-anyway — same scope-triage rule as Doc Gate, PLAN MODE Step 11) — that's the signal this agent's own Publish Mode START detection looks for, unlike Doc Gate's own phase above, which is transient and never persists as a detection trigger.
 
 ### Step 1 — Read state
 
@@ -133,7 +150,7 @@ Triggered after `qa-auditor` → `documentation-auditor` (Doc Post-Impl) hands o
 
 ### Step 2 — Generate the UAT checklist
 
-Generate a short manual-verification checklist from the task's scope (read from the plan file) → write `UAT.md`, seeded from `skills/coding-chain-shared/assets/task/UAT.template.md`. If `.harness/workflow.md`'s `## Commits / MR` section was loaded, it governs commit message format and what the PR/MR description must include — the UAT checklist at minimum, per the template.
+Generate a short manual-verification checklist from the task's scope (read from the plan file) → write `UAT.md`, seeded from `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/task/UAT.template.md`. If `.harness/workflow.md`'s `## Commits / MR` section was loaded, it governs commit message format and what the PR/MR description must include — the UAT checklist at minimum, per the template.
 
 ### Step 3 — Consolidated drift-flag question
 
@@ -145,7 +162,7 @@ Collect: `STATE.md`'s `Harness flags` field (populated by `qa-engineer`/`softwar
 
 ### Step 5 — Consolidated commit
 
-Stage and commit everything, including the task folder's final state — it was scratch (git-excluded within the worktree) while the chain ran, and this commit is what makes it permanent history once merged. Commit message format follows `.harness/workflow.md`'s `## Commits / MR` conventions if loaded, else a plain conventional-commit default. Never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
+Stage and commit everything, including the task folder's final state — it was working scratch while the chain ran (nothing commits it mid-chain; no Plan Mode step excludes it either), and this commit is what makes it permanent history once merged. Commit message format follows `.harness/workflow.md`'s `## Commits / MR` conventions if loaded, else a plain conventional-commit default. Never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
 
 ### Step 6 — PR/MR creation
 
@@ -171,8 +188,8 @@ Two modes total: **Attended** (default — runs in the current session like ever
 
 - **tmux is a hard prerequisite** for Unattended. Launch via `tmux new-session -d -s <branch> '...'`; a human attaches with `tmux attach -t <branch>`. If `tmux` isn't available when Unattended is selected, fall back to asking again (Attended, or abort the selection) rather than silently running attended anyway.
 - **Control plane.** `STATE.md` + `HISTORY.md` are the same files used for Attended runs — no separate unattended-only format. Every phase transition, in either mode, writes both.
-- **Handoff-needed pause.** Any step in this agent — in Plan Mode or Publish Mode — that would otherwise call `AskUserQuestion` (same-day slug collision, feasibility blocker, Doc Gate HIGH finding, drift-flag consolidation question) instead, when running unattended, sets `STATE.md`'s `Phase: HANDOFF NEEDED` with the pending question written into `Key info`, appends the same to `HISTORY.md`, and stops cleanly rather than hanging on input that can't arrive. **Resume:** a human edits `STATE.md`'s answer into `Key info` (or a dedicated answer field) and re-triggers the run; the same worktree/branch are reused, never recreated.
-- **Monitoring.** A read-only monitor pass reports progress from `STATE.md`/`HISTORY.md` alone — current phase, worktree/branch, PR/MR status once one exists — and, only when the current phase is `HANDOFF NEEDED`, includes a bounded `tmux capture-pane -t <branch> -p | tail -n 20`-style tail for extra context. The monitor never derives state from the pane text itself, only from `STATE.md`. `task-orchestrator` itself doesn't run this pass — `/cairn-run-task` (not part of this task, see the coding-chain design doc) is the entry point that invokes a monitoring pass against a launched Unattended run, on whatever cadence it's asked to check.
+- **Handoff-needed pause.** Any step in this agent — in Plan Mode or Publish Mode — that would otherwise call `AskUserQuestion` (same-day slug collision, feasibility blocker, in-scope Doc Gate CRITICAL/HIGH finding, drift-flag consolidation question) instead, when running unattended, sets `STATE.md`'s `Phase: HANDOFF NEEDED` with the pending question written into `Key info`, appends the same to `HISTORY.md`, and stops cleanly rather than hanging on input that can't arrive. **Resume:** a human edits `STATE.md`'s answer into `Key info` (or a dedicated answer field) and re-triggers the run; the same worktree/branch are reused, never recreated.
+- **Monitoring.** A read-only monitor pass reports progress from `STATE.md`/`HISTORY.md` alone — current phase, worktree/branch, PR/MR status once one exists — and, only when the current phase is `HANDOFF NEEDED`, includes a bounded `tmux capture-pane -t <branch> -p | tail -n 20`-style tail for extra context. The monitor never derives state from the pane text itself, only from `STATE.md`. `task-orchestrator` itself doesn't run this pass — `/cairn-run-task` is the entry point that invokes a monitoring pass against a launched Unattended run, on whatever cadence it's asked to check.
 - **Stale detection.** Fingerprint each check via `git rev-parse HEAD` + `git status --porcelain` (inside the worktree) + `STATE.md`'s current `Phase`. If the fingerprint is byte-identical across repeated checks with no phase advancement and no terminal state (`PUBLISH` or `HANDOFF NEEDED`) reached, conclude the run has stalled: report `STALLED` in `STATE.md`/`HISTORY.md` (distinct from a clean finish or a clean pause) and stop the detached run with `tmux kill-session -t <branch>`. Same monitoring-pass caller (`/cairn-run-task`) performs this check, not `task-orchestrator` running inside its own detached session.
 - **Pause timing.** The `(Attended) / HANDOFF NEEDED (Unattended)` pairings on individual steps below (e.g. PLAN MODE Steps 2 and 7) describe what happens if that step is reached *while actually running detached* — i.e. on a **resumed** invocation inside the `tmux` session a prior Unattended run already launched. They do not apply to the initial Plan Mode turn that makes the Attended/Unattended choice itself (Step 8) and launches the detached session (Step 11): that turn runs attended, in the normal calling session, exactly like any other Plan Mode run, so `AskUserQuestion` at Steps 2 or 7 works normally there. Only a later resumed-in-tmux invocation — after a `HANDOFF NEEDED` pause has already been answered and re-triggered — could hit an unanswerable `AskUserQuestion`, which is what this substitution is for.
 
@@ -207,9 +224,14 @@ Task folder: docs/.tasks/YYYY-MM-DD-<slug>/STATE.md
 Check whether the plan's scope requires doc updates against what already
 exists. Report findings only — this is a read-only audit, no AskUserQuestion,
 no file writes.
+
+This runs as a normal full audit (no REVIEW FOCUS: — that field scopes to a
+single document and drops the cross-artifact check, which doesn't fit a Doc
+Gate). The invoking session gates only on findings related to this task's
+scope; unrelated pre-existing findings are noted, not blocking.
 ```
 
-After `documentation-auditor` reports back, the **main-thread session that invoked it** (not `documentation-auditor` itself, which has no `AskUserQuestion` and never writes files) acts on the result: a HIGH-severity finding (contradicts existing docs, or depends on a doc that isn't there) needs a proceed-anyway/stop-and-fix-first decision via `AskUserQuestion` (Attended) / `HANDOFF NEEDED` on `STATE.md` (Unattended) before `qa-engineer` starts; anything lower severity just gets noted. Either way, that same main-thread session moves `STATE.md`'s `Phase` straight to `QA-RED` as `qa-engineer` starts — see PLAN MODE Step 11.
+After `documentation-auditor` reports back, the **main-thread session that invoked it** (not `documentation-auditor` itself, which has no `AskUserQuestion` and never writes files) acts on the result: a CRITICAL or HIGH finding **within this task's scope** (contradicts existing docs, or depends on a doc that isn't there) needs a proceed-anyway/stop-and-fix-first decision via `AskUserQuestion` (Attended) / `HANDOFF NEEDED` on `STATE.md` (Unattended) before `qa-engineer` starts; anything lower severity, or any finding unrelated to this task's scope, just gets noted. Either way, that same main-thread session moves `STATE.md`'s `Phase` straight to `QA-RED` and sets `Handoff to: qa-engineer` as `qa-engineer` starts — see PLAN MODE Step 11.
 
 **Plan Mode — Unattended (launch report, no synchronous handoff):**
 
@@ -263,7 +285,8 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | No ticket sync backend configured | Proceed local-only — Steps 10 (Plan)/7-8 (Publish) become no-ops for the ticket write; `TRACKER.md`/`STATE.md` bookkeeping still happens. Not an error. |
 | `qa-engineer`/`software-engineer` feasibility assessment flags the plan as not implementable as written | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): revise the plan first, or proceed anyway and let the chain surface it again downstream. |
 | Unattended selected but `tmux` isn't available | Report it, ask again whether to proceed Attended instead — never silently fall back without telling the user. |
-| Doc Gate (or Doc Post-Impl) reports a HIGH-severity finding | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): proceed anyway, or stop and fix upstream docs first. |
+| Doc Gate (or Doc Post-Impl) reports a CRITICAL or HIGH finding **related to this task's scope** | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): proceed anyway, or stop and fix upstream docs first. |
+| Doc Gate (or Doc Post-Impl) reports a CRITICAL or HIGH finding **unrelated to this task's scope** (pre-existing repo-wide doc debt surfaced by the full audit) | Note it in `STATE.md`'s `Key info` and continue — never blocks the chain. |
 | `gh auth status` / `glab auth status` fails, or the CLI is missing, at Publish | `TERMINATED: [gh|glab] is required and authenticated to publish this task. Resolve and retry.` |
 | Pre-commit hook fails on the consolidated commit | `TERMINATED: pre-commit hook failed. Resolve the reported issue and retry — never bypassed with --no-verify.` |
 | Stale-detection fingerprint repeats with no phase advancement (Unattended) | Report `STALLED`, stop — distinct from `HANDOFF NEEDED` (a pause on a real question) and `PUBLISH` (a clean finish). |
@@ -281,7 +304,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 2. Resolve the task folder — resume if one is already named, else check for a same-day collision and create a fresh one via `AskUserQuestion` if needed (Step 2).
 3. Detect submodule scope (Step 3); load `.harness/workflow.md` if present (Step 4).
 4. Create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` (Step 5); suggest `harness-engineer` if `.harness/` is absent entirely (Step 6).
-5. Invoke `qa-engineer` + `software-engineer` for feasibility assessment (Step 7).
+5. Invoke `qa-engineer` + `software-engineer` at their Feasibility Assessment mode, passing the plan path directly in opening context — `STATE.md` doesn't exist yet, and neither agent writes anything at this point (Step 7).
 6. Ask Attended/Unattended if not already specified (Step 8).
 7. Write `STATE.md` + `HISTORY.md` (Step 9); call `project-manager` Status Sync → In Progress if ticket sync is active (Step 10).
 8. Attended: emit the Plan → Doc Gate `PHASE HANDOFF`. Unattended: launch the detached tmux run and emit the launch report instead (Step 11).

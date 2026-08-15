@@ -87,7 +87,7 @@ Terminal — does not itself invoke `task-orchestrator` or any writer agent. A `
 1. **Determine granularity.** If `user-stories.md` exists: one row per user story (a user story is already sized right for one branch/PR/TDD-cycle, and `documentation-auditor` already traces every PRD `FR-###` to a user story, so the atomic boundary is already vetted). If it does not exist: one row per PRD feature/epic section.
 2. **Propose the decomposition.** For each unit at the chosen granularity, draft a task stub: a slug (kebab-case, matching the namespace `task-orchestrator` will later create folders in — `docs/.tasks/YYYY-MM-DD-<slug>/`) and a one-line scope description.
 3. **Confirm before writing.** Present the full proposed row set via `AskUserQuestion` — a per-row (or batched) confirm/edit/drop decision. Never write `docs/.tasks/TRACKER.md` before this gate is answered.
-4. **Write the file**, seeded from `skills/coding-chain-shared/assets/TRACKER.template.md`: one row per confirmed task — Slug, Scope, Status `Idea`, Ticket `—`, Task File `—`.
+4. **Write the file**, seeded from `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/TRACKER.template.md` (`${CLAUDE_PLUGIN_ROOT}` is the plugin's own install location — a bare `skills/...` path would resolve against the consuming project's cwd and fail): one row per confirmed task — Slug, Scope, Status `Idea`, Ticket `—`, Task File `—`. Task File stays `—` here; no task folder exists until `task-orchestrator` creates one, and Update mode fills the column in then (Step 4.2).
 
 Rows can also be hand-authored directly in the table after this — never require a hand-authored `Idea` row to trace back to a PRD requirement.
 
@@ -101,6 +101,7 @@ Rows can also be hand-authored directly in the table after this — never requir
 2. **Resync Status** for every row:
    - If the row has a Ticket URL → that ticket's current state is authoritative (see TICKET SYNC for the status mapping). Fetch/derive via the configured backend.
    - Else → `Glob(docs/.tasks/)` for a folder matching the row's slug, read its `STATE.md` if found, and map its phase to one of `Idea` / `Groomed` / `In Progress: <phase>` / `In Review` / `Blocked` / `Done`. No matching folder → row stays `Idea`.
+   - **Populate the Task File column** from that same glob: when a matching `docs/.tasks/YYYY-MM-DD-<slug>/` folder is found, write its folder path into the row's `Task File` column (nothing else populates it — the column stays `—` forever otherwise). Do this whether the Status came from the folder or from an authoritative ticket; the two are independent. No matching folder → leave `—`. If more than one dated folder matches the slug (a task re-run on a later date), record the most recent.
    - This is read-only against per-task folders — never write into them.
 3. **Run Ticket Sync** (see TICKET SYNC section) for any row that now has a matching `docs/.plans/<slug>.md` but no Ticket URL yet, or whose plan content has changed since the ticket was last synced.
 4. **Write the updated table** via `Write`/`Edit`.
@@ -135,7 +136,7 @@ Once `plan-writing` produces `docs/.plans/<slug>.md` for a `TRACKER.md` row, the
 - **Done** — once merged/closed.
 - **Blocked** — mapped from `STATE.md`'s `HANDOFF NEEDED` phase, so a paused task reads as Blocked on the board rather than silently stuck `In Progress`.
 
-This status-write logic is self-contained and callable on its own — given a slug and a target status, it locates the row's ticket (via `TRACKER.md`'s Ticket column) and writes the new status to the backend, then updates `TRACKER.md`'s own Status column to match. The exact calling convention (what `task-orchestrator` passes, and how) is a follow-up design — out of scope for this agent's own behavior, which only needs to accept a slug and a target status and perform the flip.
+This status-write logic is self-contained and callable on its own — given a slug and a target status, it locates the row's ticket (via `TRACKER.md`'s Ticket column) and writes the new status to the backend, then updates `TRACKER.md`'s own Status column to match. At the same time, **populate the row's `Task File` column** if it's still `—`: `Glob(docs/.tasks/)` for a folder matching the slug and write that folder path in. `task-orchestrator` calls Status Sync right after creating the task folder, so this is the earliest point the path is knowable — and, alongside Step 4.2's resync, the only thing that ever fills that column. The exact calling convention (what `task-orchestrator` passes, and how) is a follow-up design — out of scope for this agent's own behavior, which only needs to accept a slug and a target status and perform the flip.
 
 When no backend is configured, Status Sync is a no-op for the ticket write (nothing to flip), but `TRACKER.md`'s own Status column still resyncs from `STATE.md` per Step 4.
 
@@ -180,7 +181,7 @@ Result
 
 ## START
 
-0. **Entry point check.** Is this invocation a targeted status-flip call — carrying a slug and a target status, not a "decompose the PRD" or "sync the tracker" request (e.g. `task-orchestrator` invoking this agent at a chain checkpoint)? → **Status Sync**: skip the Upstream Existence Check and Generate/Update mode detection entirely. Locate the row by slug in `docs/.tasks/TRACKER.md`, perform the status flip per TICKET SYNC's "Status flips" subsection (ticket write if a backend is configured, `TRACKER.md` Status column update either way), then emit **PROJECT MANAGER COMPLETE** with Mode `Status Sync` and STOP. Otherwise, continue to Step 1.
+0. **Entry point check.** Is this invocation a targeted status-flip call — carrying a slug and a target status, not a "decompose the PRD" or "sync the tracker" request (e.g. `task-orchestrator` invoking this agent at a chain checkpoint)? → **Status Sync**: skip the Upstream Existence Check and Generate/Update mode detection entirely. Locate the row by slug in `docs/.tasks/TRACKER.md`, perform the status flip per TICKET SYNC's "Status flips" subsection (ticket write if a backend is configured, `TRACKER.md` Status column update either way, plus the `Task File` column if a matching task folder now exists and the column is still `—`), then emit **PROJECT MANAGER COMPLETE** with Mode `Status Sync` and STOP. Otherwise, continue to Step 1.
 1. `Glob(docs/requirements/prd.md)` — Upstream Existence Check (Step 1). Terminate if absent.
 2. `Glob(docs/.tasks/TRACKER.md)` to determine Generate vs. Update mode (Step 2).
 3. Generate mode: determine granularity, propose the decomposition, confirm via `AskUserQuestion`, write the seeded table (Step 3).

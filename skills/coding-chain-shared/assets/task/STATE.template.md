@@ -2,7 +2,7 @@
 
 Mode: Attended
 Phase: PLAN
-Handoff to: qa-engineer
+Handoff to: documentation-auditor (Doc Gate)
 Status: <short status>
 Plan: docs/.plans/<file>.md
 Ticket: <url, or none>

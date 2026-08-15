@@ -1,6 +1,6 @@
 ---
 name: product-design-writing
-description: Discovery dimensions, artifact formats, Reference Artifact Intake, and the Impeccable Shape Pass for the 3 design documents (ux-spec, ui-layout-spec, design-system). Loaded by product-designer alongside writer-shared.
+description: Discovery dimensions, artifact formats, Reference Artifact Intake, the Impeccable Shape Pass, and the Design Quality Pass for the 3 design documents (ux-spec, ui-layout-spec, design-system). Loaded by product-designer alongside writer-shared.
 ---
 
 # Product Design Writing
@@ -17,7 +17,7 @@ Loaded by `product-designer` for all 3 design document types, alongside `writer-
 | `ui-layout-spec.md` | `docs/design/ux-spec.md` |
 | `design-system.md` | `docs/requirements/prd.md` (independent branch — does not require `ux-spec.md`) |
 
-`ui-layout-spec.md` additionally requires Impeccable to be vendored — see Impeccable Shape Pass below; this is a separate, additional gate on top of the upstream document check.
+`ui-layout-spec.md` additionally requires Impeccable to be vendored — see Impeccable Shape Pass below; this is a separate, additional gate on top of the upstream document check. `ui-layout-spec.md` and `design-system.md` also run a soft-optional Design Quality Pass (Taste Skill) — see Design Quality Pass below; unlike Impeccable, nothing aborts if it's absent.
 
 ---
 
@@ -361,7 +361,7 @@ For each component: define variants, visual rules, and token references. Do NOT 
 
 ## Reference Artifact Intake (ui-layout-spec.md and design-system.md only)
 
-Runs after Skill Loading (and after Impeccable Shape Pass for `ui-layout-spec.md`), before Discovery Phase, when the opening context includes a `Reference Artifact: <path-or-url>` field. Skip entirely for `ux-spec.md` and when no such field is present.
+Runs after Skill Loading (and after Impeccable Shape Pass and Design Quality Pass, for the document types those run on), before Discovery Phase, when the opening context includes a `Reference Artifact: <path-or-url>` field. Skip entirely for `ux-spec.md` and when no such field is present.
 
 1. **Load the artifact:** local file path → `Read`. `http(s)://` URL (e.g. a `claude.ai/artifacts` link) → `WebFetch`. If loading fails, tell the user and continue discovery without it — never block the run on a missing/unreachable artifact.
 2. **Extract observations:** layout structure and regions, component inventory, visual patterns (color usage, typography, spacing) evident in the markup/styles.
@@ -383,3 +383,16 @@ Runs after Skill Loading, before Discovery Phase, when producing `ui-layout-spec
 4. Treat the design-brief output from `shape` purely as **pre-filled input** to the upcoming Discovery Phase — same treatment as Reference Artifact Intake's pre-fills (propose the pre-filled answer per discovery dimension, ask the user to confirm or correct, never assume silently). Do NOT treat this as a second freestanding interview layered on top of the normal Discovery Phase — `shape` itself runs its own interview internally; only its final output is used here, as pre-fill, not as a live second conversation.
 5. If this is the first time Impeccable has run in this project (no `PRODUCT.md` present), its own `shape` invocation may divert into its own product-definition bootstrap first — this is a real, expected one-time cost on first use, not a bug. Do not attempt to skip or suppress it.
 6. Proceed to Discovery Phase (or Reference Artifact Intake, if a `Reference Artifact:` field is also present).
+
+---
+
+## Design Quality Pass (ui-layout-spec.md and design-system.md only)
+
+Taste Skill is a vendored third-party design-guidance plugin, not part of cairn — cairn never ships or vendors it (see the spec's Design Quality Pass section for the full rationale). Unlike the Impeccable Shape Pass, this is **soft-optional**: nothing aborts if Taste Skill isn't installed.
+
+Runs after Skill Loading, after the Impeccable Shape Pass when producing `ui-layout-spec.md`, before Reference Artifact Intake and Discovery Phase, when producing `ui-layout-spec.md` or `design-system.md`. Skip entirely for `ux-spec.md`.
+
+1. Attempt `Skill(skill: "taste-skill:design-taste-frontend")` once.
+2. **If the invocation fails** (plugin not installed) — skip silently and proceed to the next step (Reference Artifact Intake, or Discovery Phase directly). Do NOT `ABORT`, do NOT tell the user anything beyond the existing `Flags` line at COMPLETION.
+3. **If it succeeds** — treat its design-direction output purely as **pre-filled input** to the upcoming Discovery Phase, same treatment as the Impeccable Shape Pass's `shape` output and Reference Artifact Intake's pre-fills (propose the pre-filled answer per discovery dimension, ask the user to confirm or correct, never assume silently). Taste Skill's own stated scope is landing pages, portfolios, and redesigns — not dashboards, data tables, or multi-step product UI; apply its direction only where it actually fits the artifact being produced, otherwise note the mismatch in your own reasoning and proceed without it.
+4. Proceed to Reference Artifact Intake (if a `Reference Artifact:` field is present) or Discovery Phase directly.

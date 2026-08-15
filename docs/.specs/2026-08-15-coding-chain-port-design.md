@@ -41,7 +41,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 | Agent | Model | Role | Terminal? |
 |---|---|---|---|
-| `harness-engineer` | sonnet | Generate/update `.harness/*.md` from observed conventions, `AskUserQuestion` per-rule confirm gate, evidence-based only, ~40-line cap per file | Terminal |
+| `harness-engineer` | sonnet | Generate/update `.harness/*.md` from observed conventions (or, on a fresh codebase, from a direct interview — see Fresh Codebase below), `AskUserQuestion` per-rule confirm gate, evidence-based by default, ~40-line cap per file | Terminal |
 | `task-orchestrator` | sonnet | Plan Mode: create/resume `docs/.tasks/<feature-slug>.md`, draft plan, run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
 | `qa-engineer` | sonnet | Writes tests — pre-implementation (TDD red, hard-requires `superpowers:test-driven-development`) in the chain, or post-implementation in Direct Mode | Hands off |
 | `software-engineer` | opus | Implements in-scope code, stack-agnostic, makes qa-engineer's tests pass (TDD green) | Hands off |
@@ -77,6 +77,8 @@ Matches maestro's pattern — `Glob`-check before loading, skip silently if `.ha
 **Drift flagging:** `software-engineer`, `qa-engineer`, `qa-auditor` may each emit an optional `HARNESS FLAG:` note in their handoff output when they introduce/observe a pattern not covered by any existing `.harness/` rule (distinct from a violation — those go through `qa-auditor`'s HIGH-finding path above). `task-orchestrator` collects these across the chain and surfaces one consolidated `AskUserQuestion` at Publish Mode: run `harness-engineer` Update mode before publishing, or skip and publish as-is. `harness-engineer` still runs its own per-rule confirm gate when invoked — this is only the trigger.
 
 `harness-engineer` is also invocable standalone at any time, and auto-suggested by `task-orchestrator` Plan Mode on first run if `.harness/` is absent entirely.
+
+**Fresh codebase.** `harness-engineer`'s hard rule — never invent a rule with no observed basis — means Generate mode on a genuinely empty/near-empty repo (no source files beyond scaffolding) would otherwise write near-blank files full of `<!-- no convention observed -->` markers. Instead, Generate mode detects this case and switches to an interview: `AskUserQuestion` for stack/style/testing preferences directly, rather than deriving from observation. These rules are written with a **`user-specified`** provenance tag in place of the usual evidence count, so they're visibly distinct from observed rules. Once real code accumulates, a later Update mode run diffs observed conventions against the file as normal — user-specified rules stay untouched unless the codebase actively diverges from them (surfaced as a normal split/inconsistent-observation choice), and new observed rules get added alongside.
 
 ## Testing & verification
 

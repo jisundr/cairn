@@ -105,7 +105,7 @@ No tracker, so no T### numbers. Task identity is a feature-name slug, date-prefi
 **Plan Dedup.** Chain flow only starts after the gate has already run `spec-writing`→`plan-writing`, which produces `docs/.plans/<feature>.md` — a full implementation plan. `task-orchestrator` Plan Mode hard-requires this file (same "Upstream Existence Check" pattern `solution-architect` uses for prd+user-flows) and reads it as *the* plan — it does not re-draft implementation steps into `docs/.tasks/`. That file adds only what `plan-writing` doesn't produce: the feasibility assessment, worktree/branch identity, and the Task State log. One consequence: `superpowers:executing-plans` is never invoked for Chain flow — the plan-tracking role it would normally play is replaced entirely by `task-orchestrator`'s own Task State log, and `docs/.plans/<feature>.md` itself stays static reference material once written.
 
 **`## Task State` section**, inside the task file, two parts:
-- `### Current` — overwritten by whichever agent just finished: phase, handoff target, status, worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — top of file, one glance shows where things stand.
+- `### Current` — overwritten by whichever agent just finished: phase, handoff target, status, a `Plan:` pointer to the `docs/.plans/` file this task tracks (see Templates below), worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — top of file, one glance shows where things stand.
 - `### History` — append-only, one summarized line per completed phase (not full detail — that lives in git history / actual test output).
 
 ## Task decomposition (`project-manager`)
@@ -127,6 +127,51 @@ Sits between requirements and implementation, as an **optional** last step after
 ## New command: `/cairn-run-task`
 
 `/cairn-run-task <feature-slug>` — creates or resumes `docs/.tasks/YYYY-MM-DD-<feature-slug>.md` and runs the Chain flow from wherever its `### Current` state left off. Chain-flow only, since Direct flow never creates a task file — small bug-fixes stay natural-language-only through `intent-analyzer`'s normal routing, no command entry point for them. Still also reachable via plain natural-language request for Chain-flow work; this command is a direct entry point for the "call task, let it run" usage pattern.
+
+## Templates
+
+Adapted from maestro's `harness-rules-guide/assets/*.template.md` and `delivery-tracker/assets/TRACKER.template.md` — literal template assets, not just prose format description. Live under a new shared skill, `skills/coding-chain-shared/assets/`, referenced by `project-manager`/`harness-engineer`/`task-orchestrator` the way `writer-shared` is referenced by the writer trio.
+
+**`docs/.tasks/TRACKER.template.md`** — stripped of maestro's backend/milestone/promote-to-GitLab-ClickUp language entirely, since there's no backend:
+
+```markdown
+# Task Tracker
+
+> Local-only task board, decomposed from docs/requirements/prd.md by `project-manager`. Status is auto-derived from each task's own docs/.tasks/YYYY-MM-DD-<slug>.md Task State — never edit Status by hand, it's overwritten on next sync.
+
+| Slug | Scope | Status | Task File |
+|---|---|---|---|
+| — | [one-line scope, from a user story or PRD feature] | Not Started | — |
+
+**Status values:** Not Started · In Progress: <phase> · Published
+
+Run `project-manager` (Update mode) to add rows as the PRD grows and resync Status.
+```
+
+(Resolves the earlier open question about a Task File column — yes, included, filled in once `task-orchestrator` creates the matching file.)
+
+**`docs/.tasks/TASK.template.md`** — the per-task file `task-orchestrator` creates, with the `## Task State` shape locked earlier plus an explicit `Plan:` pointer field (closing the question that was still open when this section was first drafted — every downstream agent now has one unambiguous place to find the actual implementation plan):
+
+```markdown
+# Task: <slug>
+
+## Task State
+
+### Current
+Phase: PLAN
+Handoff to: qa-engineer
+Status: <short status>
+Plan: docs/.plans/<file>.md
+Worktree: <path>
+Branch: <branch-name>
+Key info: <whatever the next agent needs right now>
+Harness flags: none
+
+### History
+- PLAN → task-orchestrator, <date>: <one-line summary>
+```
+
+**`.harness/architecture.template.md`, `standards.template.md`, `workflow.template.md`** — kept structurally identical to maestro's (Stack/Layering/Boundaries/Data; Naming/Error handling/Testing/Logging; Branching/Commits-MR/Gates), evidence-driven so the actual headings barely matter — content is 100% derived at generation time, never templated. One real change: `workflow.template.md`'s branch-naming example line drops maestro's `feature/T###-<slug>` (no T### here) for **`<task-type>/<slug>`** — `feature/<slug>` or `refactor/<slug>`, matching the two Chain-flow task types.
 
 ## Open questions
 

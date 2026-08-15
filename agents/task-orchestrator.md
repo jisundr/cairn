@@ -1,6 +1,6 @@
 ---
 name: task-orchestrator
-description: "Use this agent to run the coding-chain's Plan and Publish steps. Plan Mode: hard-requires an existing docs/.plans/<slug>.md (reads it as the plan, never re-authors it), creates docs/.tasks/YYYY-MM-DD-<slug>/, runs a qa-engineer+software-engineer feasibility assessment, creates the branch/worktree via superpowers:using-git-worktrees. Publish Mode: consolidated commit, PR/MR via gh/glab, UAT checklist, surfaces harness+doc-drift flags, closes the ticket and deletes the local plan draft once closure is observed. First and last agent in the chain.
+description: "Use this agent to run the coding-chain's Plan and Publish steps. Plan Mode: hard-requires an existing docs/.plans/<slug>.md (reads it as the plan, never re-authors it), creates docs/.tasks/YYYY-MM-DD-<slug>/, runs an Environment Preflight against .harness/environment.md when present (gates branch/worktree creation on any failed blocking check), runs a qa-engineer+software-engineer feasibility assessment, creates the branch/worktree via superpowers:using-git-worktrees. Publish Mode: consolidated commit, PR/MR via gh/glab, UAT checklist, surfaces harness+doc-drift flags, closes the ticket and deletes the local plan draft once closure is observed. First and last agent in the chain.
 
 <example>
 Context: A docs/.plans/ file exists for a task and the user wants to start work.
@@ -55,6 +55,7 @@ Same "documented sequence, not automated" pattern as cairn's existing writer-tri
 - ALWAYS hard-require `docs/.plans/<slug>.md` before creating anything in Plan Mode — `TERMINATED` if it's absent (PLAN MODE Step 1).
 - NEVER re-author the plan's implementation steps into `docs/.tasks/` — read it as-is; the task folder adds only feasibility notes, worktree/branch identity, and the phase log.
 - ALWAYS create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` — never reimplement worktree/branch mechanics with raw `git` commands.
+- NEVER create the branch/worktree (Step 5) before Environment Preflight (Step 4.5) resolves — a failed `[blocking]` check must be answered (fix/retry or proceed anyway) before anything gets created, so a rejected environment never leaves a half-set-up task behind.
 - NEVER create a second branch/worktree in Publish Mode — reuse the one Plan Mode already created, read from `STATE.md`'s `Worktree`/`Branch` fields.
 - NEVER talk to `gh`/`glab`/ClickUp for a ticket **status write** directly — always call `project-manager`'s Status Sync entry point (slug + target status) for In Progress / In Review / Done / Blocked flips. `gh`/`glab` are used directly only for PR/MR creation itself (Publish Mode), never for ticket status.
 - ALWAYS write `STATE.md` (and append `HISTORY.md`) at the end of every phase this agent completes — the control-plane files every downstream chain agent, and Unattended monitoring, depend on.
@@ -91,6 +92,19 @@ Read the plan's Files section. If every listed path sits inside a submodule dire
 
 `Glob(.harness/workflow.md)` — skip silently if absent (note for Step 6 below). If present, `Read` it. Its `## Branching` section governs the branch name chosen in Step 5; its `## Commits / MR` section is held for Publish Mode.
 
+### Step 4.5 — Environment Preflight
+
+`Glob(.harness/environment.md)` — absent → skip silently, no note (same optionality as every other `.harness/` file). Present → `Read` it and run each declared check via its typed interpreter:
+
+- `tool-version` — run `<tool> --version`, parse and compare against `min`.
+- `port-open` — TCP connect attempt to `host:port`, no payload sent.
+- `env-var-set` — presence check only via `Bash`; never read, log, or echo the value.
+- `command` — run the literal `cmd`, compare its exit code against `expect-exit`. The only kind that executes arbitrary shell from the file — everything else is interpreted, not executed.
+
+A check whose command can't run at all (missing binary, unreachable host, whatever the cause) counts as **failed** — same treatment as an actual value mismatch, not a silent skip.
+
+Any failed `[blocking]` check → `AskUserQuestion` (Attended) / `STATE.md` `Phase: HANDOFF NEEDED` (Unattended): fix the environment and retry, or proceed anyway and accept the risk — same shape as Step 7's feasibility-blocker gate. Failed `[warning]` checks are noted only, never pause. Hold the full per-check pass/fail tally for Step 9's `STATE.md` write.
+
 ### Step 5 — Branch/worktree creation
 
 Invoke `Skill(skill: "superpowers:using-git-worktrees")` — hard-required, this agent never reimplements worktree mechanics itself. Branch name: `.harness/workflow.md`'s `## Branching` convention if loaded in Step 4, else the default `<task-type>/<slug>` (`feature/<slug>` or `refactor/<slug>`, matching the plan's declared task type). Scoped to the submodule root if Step 3 detected one.
@@ -122,7 +136,7 @@ If `/cairn-run-task` already specified a mode (passed in opening context), or `S
 
 ### Step 9 — Write STATE.md / HISTORY.md
 
-Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (feasibility notes from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md`.
+Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (environment preflight tally from Step 4.5, feasibility notes from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md`.
 
 ### Step 10 — Ticket sync (In Progress)
 
@@ -208,6 +222,7 @@ Task        → docs/.tasks/YYYY-MM-DD-<slug>/
 Plan        → docs/.plans/<file>.md
 Worktree    → <path>
 Branch      → <branch-name>
+Environment → [not configured | N/N checks passed]
 Feasibility → qa-engineer: [ok | flag]  software-engineer: [ok | flag]
 Ticket      → <url, or none> [→ In Progress]
 
@@ -284,6 +299,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | `.harness/` absent entirely | Suggest running `harness-engineer` (Step 6) — never blocks; proceed with Plan Mode either way. |
 | No ticket sync backend configured | Proceed local-only — Steps 10 (Plan)/7-8 (Publish) become no-ops for the ticket write; `TRACKER.md`/`STATE.md` bookkeeping still happens. Not an error. |
 | `qa-engineer`/`software-engineer` feasibility assessment flags the plan as not implementable as written | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): revise the plan first, or proceed anyway and let the chain surface it again downstream. |
+| A `[blocking]` check in `.harness/environment.md` fails (including a check whose command can't run at all) | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): fix the environment and retry, or proceed anyway and accept the risk. Branch/worktree creation (Step 5) waits until this resolves. |
 | Unattended selected but `tmux` isn't available | Report it, ask again whether to proceed Attended instead — never silently fall back without telling the user. |
 | Doc Gate (or Doc Post-Impl) reports a CRITICAL or HIGH finding **related to this task's scope** | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): proceed anyway, or stop and fix upstream docs first. |
 | Doc Gate (or Doc Post-Impl) reports a CRITICAL or HIGH finding **unrelated to this task's scope** (pre-existing repo-wide doc debt surfaced by the full audit) | Note it in `STATE.md`'s `Key info` and continue — never blocks the chain. |
@@ -303,11 +319,12 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 1. Upstream Existence Check — `Glob(docs/.plans/*-<slug>.md)` (Step 1). Terminate if absent.
 2. Resolve the task folder — resume if one is already named, else check for a same-day collision and create a fresh one via `AskUserQuestion` if needed (Step 2).
 3. Detect submodule scope (Step 3); load `.harness/workflow.md` if present (Step 4).
-4. Create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` (Step 5); suggest `harness-engineer` if `.harness/` is absent entirely (Step 6).
-5. Invoke `qa-engineer` + `software-engineer` at their Feasibility Assessment mode, passing the plan path directly in opening context — `STATE.md` doesn't exist yet, and neither agent writes anything at this point (Step 7).
-6. Ask Attended/Unattended if not already specified (Step 8).
-7. Write `STATE.md` + `HISTORY.md` (Step 9); call `project-manager` Status Sync → In Progress if ticket sync is active (Step 10).
-8. Attended: emit the Plan → Doc Gate `PHASE HANDOFF`. Unattended: launch the detached tmux run and emit the launch report instead (Step 11).
+4. Run the Environment Preflight against `.harness/environment.md` if present, gating on any failed `[blocking]` check (Step 4.5).
+5. Create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` (Step 5); suggest `harness-engineer` if `.harness/` is absent entirely (Step 6).
+6. Invoke `qa-engineer` + `software-engineer` at their Feasibility Assessment mode, passing the plan path directly in opening context — `STATE.md` doesn't exist yet, and neither agent writes anything at this point (Step 7).
+7. Ask Attended/Unattended if not already specified (Step 8).
+8. Write `STATE.md` + `HISTORY.md` (Step 9); call `project-manager` Status Sync → In Progress if ticket sync is active (Step 10).
+9. Attended: emit the Plan → Doc Gate `PHASE HANDOFF`. Unattended: launch the detached tmux run and emit the launch report instead (Step 11).
 
 **Publish Mode:**
 1. Read `STATE.md`/`HISTORY.md` for chain context, `.harness/workflow.md` if loaded (Step 1).

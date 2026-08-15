@@ -42,7 +42,7 @@ You sit between `software-engineer` and Publish. On a clean pass you hand off to
 - ALWAYS run a code quality review against the repo's own conventions, refined by `.harness/architecture.md`/`standards.md` when present.
 - Run security review, performance review, and dependency audit **conditionally only** — a security or performance concern tagged in the opening context or flagged by `software-engineer` (its `HARNESS FLAG:`/handoff notes), or a new package installation for the dependency audit. Never run these three as a blanket default on every task.
 - ALWAYS `Glob`-check for `.harness/architecture.md` and `.harness/standards.md`; `Read` and apply both when present, skip silently when `.harness/` is absent entirely.
-- `.harness/` violations: raise a `HIGH` finding, routed to `software-engineer`, **only** for a violation this task's own change introduced. NEVER flag a pre-existing violation the task didn't touch — leave it untouched, note it at most as `INFO`.
+- `.harness/` violations: raise a `HIGH` finding, routed to `software-engineer`, **only** for a violation on a line `git diff` (against the task's base commit) shows as added or modified by this task. NEVER flag a pre-existing violation — whether in an untouched file or on an untouched line inside an otherwise-edited file — leave it untouched, note it at most as `INFO`.
 - Fix-cycle routing (carried over from maestro unchanged): a broken/wrong **test** → `qa-engineer`. An **implementation bug**, or any `HIGH`+ security/performance/dependency/`.harness/` finding → `software-engineer`.
 - MAY emit one optional `HARNESS FLAG:` note when a pattern is observed with no covering `.harness/` rule (or `.harness/` absent) — never a blocking finding, collected by `task-orchestrator` for its Publish-time consolidated question.
 - ALWAYS update `STATE.md` and append `HISTORY.md` before every handoff — clean pass or fix-cycle route-back alike.
@@ -82,7 +82,11 @@ Skip silently, no finding, when the trigger isn't present — these are not run 
 
 ### Step 6 — `.harness/` load and violation check
 
-`Glob(.harness/architecture.md)` and `Glob(.harness/standards.md)` — skip silently if `.harness/` is absent entirely. If present, `Read` both and check the task-affected files against them. Raise a `HIGH` finding, routed to `software-engineer`, for any violation this task's own change introduced. Leave pre-existing violations elsewhere in the codebase untouched — this is not a full-codebase harness audit.
+`Glob(.harness/architecture.md)` and `Glob(.harness/standards.md)` — skip silently if `.harness/` is absent entirely. If present, `Read` both.
+
+Scoping is two-level, not just file-level: "task-affected" (Step 1) narrows *which files* to look at, but a touched file can still carry pre-existing violations on lines this task never changed. Use `Bash git diff` against the task's base commit (the worktree's branch point, i.e. `git diff <base>...HEAD -- <task-affected files>` or equivalent) to identify the actual **changed lines** within each task-affected file — same tool, same "what did this task actually touch" question `qa-engineer` and `software-engineer` already answer with `git diff` for their own scoping. Check `.harness/` rules only against those changed lines. A violation sitting on a line the `git diff` doesn't show as touched is pre-existing, not task-introduced, even inside a file this task otherwise edited — leave it untouched, note it as `INFO` at most, never `HIGH`.
+
+Raise a `HIGH` finding, routed to `software-engineer`, only for a violation on a line the `git diff` shows as added or modified by this task. This is not a full-codebase harness audit.
 
 ### Step 7 — Harness flag (optional)
 
@@ -189,6 +193,9 @@ Result
 PHASE HANDOFF → software-engineer
 
 Context for agent:
+This is a Chain-mode fix-cycle re-entry from qa-auditor, not a fresh
+Direct-mode request — treat it as Chain mode regardless of STATE.md's
+current Phase value.
 Plan: docs/.plans/<slug>.md
 Task folder: docs/.tasks/YYYY-MM-DD-<slug>/STATE.md
 Finding: <file:line> — <issue>

@@ -18,7 +18,7 @@ All six are new agent files under `agents/`. No existing agent file is modified 
 ## Source
 
 - `~/Projects/maestro/.claude/agents/{project-manager,harness-engineer,task-orchestrator,qa-engineer,software-engineer,qa-auditor}.md`
-- `~/Projects/maestro/.claude/skills/delivery-tracker/SKILL.md` (TRACKER.md format — local-only subset, see Task Decomposition below)
+- `~/Projects/maestro/.claude/skills/delivery-tracker/SKILL.md` (TRACKER.md format, and its source-of-truth layering — backend owns content, TRACKER.md owns board state — reused for Ticket Sync, see Task Decomposition below)
 - `~/Projects/maestro/.claude/skills/harness-rules-guide/SKILL.md`
 - `~/Projects/maestro/.claude/skills/coding-chain-guide/SKILL.md` (chain sequencing, fix-cycle routing, and its "Unattended Runs (swarm.sh)" section)
 - `~/Projects/maestro/.claude/scripts/swarm.sh` (tmux/worktree/stale-detection mechanics — ported, see Unattended Execution below)
@@ -31,7 +31,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 | maestro infra | Why dropped |
 |---|---|
-| GitLab/ClickUp sync itself (auth, MCP/CLI calls to an external backend) | Confirmed not needed — task identity and the task list both stay local (see Task Decomposition below); `project-manager` IS ported, but as a local-only decomposition agent, not a tracker-sync agent |
+| ClickUp-only assumption | Backend is GitHub/GitLab (auto-detected from `origin`, reusing `task-orchestrator` Publish Mode's existing detection) or ClickUp (explicit opt-in config, no git-remote signal for it) — not ClickUp-only like maestro defaulted. See Ticket Sync below; this reopens and replaces the earlier "fully local, no tracker" decision. |
 | `delivery-tracker`'s `tracker.html` static kanban viewer | Real, self-contained, zero-dependency — but extra scope beyond what was asked; `docs/.tasks/TRACKER.md` stays a plain Markdown table for now, viewer is a clean future add-on if wanted |
 | `.codegraph/` MCP tool (call-site/blast-radius analysis) | Same precedent as `codebase-auditor`'s port — no codegraph dependency in cairn |
 | Maestro's Interactive/Auto mode distinction | Claude Code itself already has auto/manual permission modes — no need to reimplement a separate mode split on top of them. Only Attended vs. Unattended remains as a coding-chain-specific distinction (see Unattended Execution below) |
@@ -45,9 +45,9 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 
 | Agent | Model | Role | Terminal? |
 |---|---|---|---|
-| `project-manager` | sonnet | Decomposes `docs/requirements/prd.md` (+ `user-stories.md`) into task stubs, writes `docs/.tasks/TRACKER.md` (local index). Update Mode auto-syncs each row's status from its matching `docs/.tasks/YYYY-MM-DD-<slug>/STATE.md`, if that folder exists | Terminal |
+| `project-manager` | sonnet | Decomposes `docs/requirements/prd.md` (+ `user-stories.md`) into task stubs, writes `docs/.tasks/TRACKER.md` (local index). Owns ticket content authoring (GitHub/GitLab issue or ClickUp task) once a plan exists for a row — see Ticket Sync. Update Mode auto-syncs each row's status from its ticket (if one exists) or its matching `docs/.tasks/YYYY-MM-DD-<slug>/STATE.md` otherwise | Terminal |
 | `harness-engineer` | sonnet | Generate/update `.harness/*.md` from observed conventions (or, on a fresh codebase, from a direct interview — see Fresh Codebase below), `AskUserQuestion` per-rule confirm gate, evidence-based by default, ~40-line cap per file | Terminal |
-| `task-orchestrator` | sonnet | Plan Mode: hard-requires `docs/.plans/<feature>.md` to exist (reads it as the plan, does not re-author it — see Plan Dedup below), create/resume `docs/.tasks/YYYY-MM-DD-<feature-slug>/` as a thin layer over it (feasibility assessment + worktree/branch + STATE.md/HISTORY.md only), run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
+| `task-orchestrator` | sonnet | Plan Mode: hard-requires `docs/.plans/<feature>.md` to exist (reads it as the plan, does not re-author it — see Plan Dedup below), create/resume `docs/.tasks/YYYY-MM-DD-<feature-slug>/` as a thin layer over it (feasibility assessment + worktree/branch + STATE.md/HISTORY.md only), run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Flips the ticket's status live at chain milestones when ticket sync is active (see Ticket Sync). Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness+doc-drift flag, closes the ticket and deletes the local plan draft once closure is observed | Terminal (Publish) |
 | `qa-engineer` | sonnet | Writes tests — pre-implementation (TDD red, hard-requires `superpowers:test-driven-development`) in the chain, or post-implementation in Direct Mode | Hands off |
 | `software-engineer` | opus | Implements in-scope code, stack-agnostic, makes qa-engineer's tests pass (TDD green) | Hands off |
 | `qa-auditor` | sonnet | Independent post-impl re-verification: scoped tests, best-effort coverage report, code quality; conditional security/perf/dependency checks (tag- or software-engineer-flagged, same routing as maestro) | Hands off → task-orchestrator Publish |
@@ -149,13 +149,22 @@ Long-running Chain-flow tasks can run detached, unsupervised — same mechanism 
 
 Sits between requirements and implementation, as an **optional** last step after `requirements-engineer` — not a gate. Requires `docs/requirements/prd.md` to run at all (nothing to decompose without one), but nothing downstream requires `project-manager` to have run. Chain flow works fine straight off an ad hoc request with no `TRACKER.md` in sight — gate fires → `spec-writing`/`plan-writing` → `task-orchestrator`, same as if `project-manager` never existed. `TRACKER.md` is a nice-to-have index for when you do want task-list visibility, matching cairn's no-gates philosophy. Reads `user-stories.md` too if present, optional.
 
-- **Generate mode** (no `docs/.tasks/TRACKER.md` yet): reads the PRD, proposes a decomposition into discrete task stubs, confirmed via `AskUserQuestion` before writing (same descriptive→prescriptive-style gate as `harness-engineer`, applied to task boundaries instead of code conventions). Writes `docs/.tasks/TRACKER.md`: one row per task — slug, one-line scope, status.
+- **Generate mode** (no `docs/.tasks/TRACKER.md` yet): reads the PRD, proposes a decomposition into discrete task stubs, confirmed via `AskUserQuestion` before writing (same descriptive→prescriptive-style gate as `harness-engineer`, applied to task boundaries instead of code conventions). Writes `docs/.tasks/TRACKER.md`: one row per task — slug, one-line scope, status, ticket link (empty until a plan exists — see Ticket Sync below).
 - **Granularity:** one row per user story when `user-stories.md` exists — a user story is already sized right for one branch/PR/TDD-cycle, and cairn's own `documentation-auditor` already traces every PRD `FR-###` to a user story, so the atomic boundary is already vetted. Falls back to one row per PRD feature/epic section when no `user-stories.md` exists to decompose from.
-- **Update mode** (`TRACKER.md` exists): diffs the current PRD against it — new requirements become new rows, nothing gets silently removed. Also resyncs every row's status by `Glob`-ing `docs/.tasks/` for a folder matching that row's slug and reading its `STATE.md` phase (`Not Started` if no matching folder yet, `In Progress: <phase>` from `STATE.md`, `Published` once `task-orchestrator` Publish Mode completed it). Read-only against the per-task folders — never writes into them, that's `task-orchestrator`'s territory.
-- Terminal — does not itself invoke `task-orchestrator`. A `TRACKER.md` row is picked up later, either via `/cairn-run-task <slug>` (see below) or a plain natural-language request naming the task — that's when the gate/`plan-writing`/`task-orchestrator` sequence actually runs for that one task.
+- **Update mode** (`TRACKER.md` exists): diffs the current PRD against it — new requirements become new rows, nothing gets silently removed. Also resyncs every row's Status — from the ticket if one exists for that row (authoritative, matching maestro's own source-of-truth layering: backend owns content, `TRACKER.md` owns board state), falling back to `Glob`-ing `docs/.tasks/` for a matching `STATE.md` phase when no ticket exists yet (`Not Started` / `In Progress: <phase>` / `Published`). Read-only against the per-task folders — never writes into them, that's `task-orchestrator`'s territory.
+- Terminal — does not itself invoke `task-orchestrator`. A `TRACKER.md` row is picked up later, either via `/cairn-run-task <slug-or-path-or-ticket>` (see below) or a plain natural-language request naming the task — that's when the gate/`plan-writing`/`task-orchestrator` sequence actually runs for that one task.
 - `docs/.tasks/TRACKER.md`'s slugs are the same namespace `task-orchestrator` creates per-task folders in (`docs/.tasks/YYYY-MM-DD-<slug>/`) — a row's slug and its eventual task folder's slug must match for status auto-sync to find it.
 
-**UAT checklist** — `task-orchestrator` Publish Mode generates a short manual-verification checklist from the task's scope, included in the PR/MR body. Kept from maestro; useful even solo as a pre-merge sanity pass.
+### Ticket Sync
+
+`project-manager` owns all ticket content authoring — same responsibility maestro's version has, scoped to two backends instead of ClickUp-only: **GitHub/GitLab** (auto-detected from `origin`, reusing `task-orchestrator` Publish Mode's existing host detection) or **ClickUp** (explicit opt-in, needs its own API auth config — no git-remote signal for it).
+
+- Once `plan-writing` produces `docs/.plans/<slug>.md` for a `TRACKER.md` row, `project-manager`'s next Update mode run creates (or updates) a matching ticket — issue/task title from the row's scope, body synced from the plan's content (not just a link, since the local file won't outlive the ticket — see below). Writes the ticket URL into `TRACKER.md`'s Ticket column and into `docs/.plans/<slug>.md` itself (a `Ticket:` line near the top), linking both ways.
+- **`docs/.plans/<slug>.md` is a working draft, not the permanent record** — kept locally so the chain isn't hitting the tracker API on every read (`task-orchestrator`'s Naming Match `Glob` lookup stays exactly as specced, local-file-based). The ticket is what survives: `task-orchestrator` flips the ticket's status live as the chain progresses (same optimistic pattern as maestro's TRACKER STATUS SYNC — To Do → In Progress → In Review → Done at the matching chain milestones), and `project-manager`'s next sync is what's authoritative for `TRACKER.md`'s Status column, same layering as above.
+- **Local plan file persists until the ticket closes** — not a fixed Publish-time delete. Ticket close normally coincides with `task-orchestrator` flipping status to Done at Publish, but if closure happens later or separately (manual close, delayed review), the local file just stays until then. `task-orchestrator` deletes `docs/.plans/<slug>.md` once it observes the ticket is closed — at Publish if that's when closure happens, or on a later invocation otherwise.
+- No sync at all when neither GitHub/GitLab nor ClickUp is configured — `project-manager` and `task-orchestrator` degrade to the fully-local behavior already specced elsewhere (local Status derivation, plan never deleted automatically). Ticket sync is additive, not required.
+
+**UAT checklist** — `task-orchestrator` Publish Mode generates a short manual-verification checklist from the task's scope, included in the PR/MR body (and, when ticket sync is active, in the ticket too). Kept from maestro; useful even solo as a pre-merge sanity pass.
 
 ## VCS / Publish
 
@@ -163,7 +172,7 @@ Sits between requirements and implementation, as an **optional** last step after
 
 ## New command: `/cairn-run-task`
 
-`/cairn-run-task <slug-or-path> [--unattended]` — creates or resumes `docs/.tasks/YYYY-MM-DD-<feature-slug>/` and runs the Chain flow from wherever its `STATE.md` left off. Accepts either a bare slug or a pasted path (to the task folder or any file inside it, or to the `docs/.plans/` file) — resolves either form to the right task rather than requiring the bare slug only. Chain-flow only, since Direct flow never creates a task folder — small bug-fixes stay natural-language-only through `intent-analyzer`'s normal routing, no command entry point for them.
+`/cairn-run-task <slug-or-path-or-ticket> [--unattended]` — creates or resumes `docs/.tasks/YYYY-MM-DD-<feature-slug>/` and runs the Chain flow from wherever its `STATE.md` left off. Accepts a bare slug, a pasted path (to the task folder, any file inside it, or the `docs/.plans/` file), or a ticket URL/ID (resolved via `TRACKER.md`'s Ticket column when ticket sync is active) — resolves any of these to the right task rather than requiring the bare slug only. Chain-flow only, since Direct flow never creates a task folder — small bug-fixes stay natural-language-only through `intent-analyzer`'s normal routing, no command entry point for them.
 
 **Attended vs. unattended:** `--unattended` forces the tmux-detached mode. If omitted, and `STATE.md` doesn't already record a mode from a prior run, `AskUserQuestion` asks once (Attended / Unattended) before starting — never silently defaults either way. Still also reachable via plain natural-language request for Chain-flow work (attended only — unattended needs the explicit flag or the prompt, there's no natural-language trigger for it); this command is a direct entry point for the "call task, let it run" usage pattern.
 
@@ -176,15 +185,15 @@ Adapted from maestro's `harness-rules-guide/assets/*.template.md` and `delivery-
 ```markdown
 # Task Tracker
 
-> Local-only task board, decomposed from docs/requirements/prd.md by `project-manager`. Status is auto-derived from each task's own docs/.tasks/YYYY-MM-DD-<slug>/STATE.md — never edit Status by hand, it's overwritten on next sync.
+> Decomposed from docs/requirements/prd.md by `project-manager`. Status is auto-derived — from the linked ticket once one exists (authoritative), otherwise from docs/.tasks/YYYY-MM-DD-<slug>/STATE.md. Never edit Status by hand, it's overwritten on next sync.
 
-| Slug | Scope | Status | Task File |
-|---|---|---|---|
-| — | [one-line scope, from a user story or PRD feature] | Not Started | — |
+| Slug | Scope | Status | Ticket | Task File |
+|---|---|---|---|---|
+| — | [one-line scope, from a user story or PRD feature] | Not Started | — | — |
 
 **Status values:** Not Started · In Progress: <phase> · Published
 
-Run `project-manager` (Update mode) to add rows as the PRD grows and resync Status.
+Run `project-manager` (Update mode) to add rows as the PRD grows, sync tickets, and resync Status.
 ```
 
 (Resolves the earlier open question about a Task File column — yes, included, filled in once `task-orchestrator` creates the matching file.)
@@ -199,6 +208,7 @@ Phase: PLAN
 Handoff to: qa-engineer
 Status: <short status>
 Plan: docs/.plans/<file>.md
+Ticket: <url, or none>
 Worktree: <path>
 Branch: <branch-name>
 Key info: <whatever the next agent needs right now>

@@ -39,7 +39,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 | Hard 80% coverage gate | Stack-agnostic here means coverage tooling availability varies; best-effort report instead (see Testing section) |
 | Per-stack engineer-guide skills (react/fastapi/rust/tauri/etc.) | Stack-agnostic implementation — infer conventions from the repo itself, no maintained per-stack skill library |
 | `LEARNINGS:` block → `CLAUDE.md` `## Learnings` merge | Separate feature, no merge mechanic exists in cairn today; replaced by the lighter Task State section (below), scoped to this port |
-| ID Input Resolution (bare tracker ID → synthesized task file) | No tracker, nothing to resolve from |
+| ID Input Resolution (bare tracker ID → synthesized task file from scratch, no local file required yet) | Partially reinstated, lighter — `/cairn-run-task` accepts a ticket URL/ID (see New command below), but only to look up an *existing* `TRACKER.md` row/task folder, never to synthesize one from nothing the way maestro's version does |
 
 ## Agent roster
 
@@ -160,7 +160,7 @@ Sits between requirements and implementation, as an **optional** last step after
 `project-manager` owns all ticket content authoring — same responsibility maestro's version has, scoped to two backends instead of ClickUp-only: **GitHub/GitLab** (auto-detected from `origin`, reusing `task-orchestrator` Publish Mode's existing host detection) or **ClickUp** (explicit opt-in, needs its own API auth config — no git-remote signal for it).
 
 - Once `plan-writing` produces `docs/.plans/<slug>.md` for a `TRACKER.md` row, `project-manager`'s next Update mode run creates (or updates) a matching ticket — issue/task title from the row's scope, body synced from the plan's content (not just a link, since the local file won't outlive the ticket — see below). Writes the ticket URL into `TRACKER.md`'s Ticket column and into `docs/.plans/<slug>.md` itself (a `Ticket:` line near the top), linking both ways.
-- **`docs/.plans/<slug>.md` is a working draft, not the permanent record** — kept locally so the chain isn't hitting the tracker API on every read (`task-orchestrator`'s Naming Match `Glob` lookup stays exactly as specced, local-file-based). The ticket is what survives: `task-orchestrator` flips the ticket's status live as the chain progresses (same optimistic pattern as maestro's TRACKER STATUS SYNC — To Do → In Progress → In Review → Done at the matching chain milestones), and `project-manager`'s next sync is what's authoritative for `TRACKER.md`'s Status column, same layering as above.
+- **`docs/.plans/<slug>.md` is a working draft, not the permanent record** — kept locally so the chain isn't hitting the tracker API on every read (`task-orchestrator`'s Naming Match `Glob` lookup stays exactly as specced, local-file-based). The ticket is what survives: `task-orchestrator` flips the ticket's status live at the same three checkpoints maestro's own TRACKER STATUS SYNC uses — **In Progress** at branch/plan creation (Plan Mode start), **In Review** at PR/MR creation (Publish Mode, once opened), **Published** (maestro's Done) once merged/closed — and `project-manager`'s next sync is what's authoritative for `TRACKER.md`'s Status column, same layering as above. **Blocked** is the one addition beyond maestro's three-checkpoint flip: it maps directly to `STATE.md`'s `HANDOFF NEEDED` phase (see Unattended Execution) — a task paused waiting on a human answer reads as Blocked on the board, not silently stuck In Progress.
 - **Local plan file persists until the ticket closes** — not a fixed Publish-time delete. Ticket close normally coincides with `task-orchestrator` flipping status to Done at Publish, but if closure happens later or separately (manual close, delayed review), the local file just stays until then. `task-orchestrator` deletes `docs/.plans/<slug>.md` once it observes the ticket is closed — at Publish if that's when closure happens, or on a later invocation otherwise.
 - No sync at all when neither GitHub/GitLab nor ClickUp is configured — `project-manager` and `task-orchestrator` degrade to the fully-local behavior already specced elsewhere (local Status derivation, plan never deleted automatically). Ticket sync is additive, not required.
 
@@ -191,7 +191,7 @@ Adapted from maestro's `harness-rules-guide/assets/*.template.md` and `delivery-
 |---|---|---|---|---|
 | — | [one-line scope, from a user story or PRD feature] | Not Started | — | — |
 
-**Status values:** Not Started · In Progress: <phase> · Published
+**Status values:** Not Started · In Progress: <phase> · In Review · Blocked · Published
 
 Run `project-manager` (Update mode) to add rows as the PRD grows, sync tickets, and resync Status.
 ```

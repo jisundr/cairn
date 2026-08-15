@@ -101,7 +101,7 @@ Read the plan's Files section. If every listed path sits inside a submodule dire
 - `env-var-set` — presence check only via `Bash`; never read, log, or echo the value.
 - `command` — run the literal `cmd`, compare its exit code against `expect-exit`. The only kind that executes arbitrary shell from the file — everything else is interpreted, not executed.
 
-A check whose command can't run at all (missing binary, unreachable host, whatever the cause) counts as **failed** — same treatment as an actual value mismatch, not a silent skip.
+A check whose command can't run at all (missing binary, unreachable host, whatever the cause) counts as **failed** — same treatment as an actual value mismatch, not a silent skip. A check line that can't be parsed at all — an unrecognized kind, or a recognized kind missing a required field — gets the same treatment: **failed**, at whatever severity its `[blocking]`/`[warning]` tag declares, or `[warning]` if even the tag itself is missing or malformed. No silent-skip tier for any failure mode.
 
 Any failed `[blocking]` check → `AskUserQuestion` (Attended) / `STATE.md` `Phase: HANDOFF NEEDED` (Unattended): fix the environment and retry, or proceed anyway and accept the risk — same shape as Step 7's feasibility-blocker gate. Failed `[warning]` checks are noted only, never pause. Hold the full per-check pass/fail tally for Step 9's `STATE.md` write.
 

@@ -100,7 +100,14 @@ environment.template.md   > Refines coding-chain behavior. Blocking checks gate 
                           # Environment Checks  →  ## Toolchain · ## Services · ## Env vars · ## Other checks
 ```
 
-Each written architecture/standards/workflow rule line ends with its evidence count, e.g. `- Files under src/ use PascalCase for component names (12 files observed).` Each written `environment.md` check line carries its kind, fields, severity, and evidence note instead, e.g. `- [blocking] node >= 20.0.0 — tool-version: node, min 20.0.0 — evidence: package.json engines.node`. Sections with no confirmed rule keep `<!-- no convention observed -->`. Enforce the ~40-line cap per file (Hard Requirements).
+Each written architecture/standards/workflow rule line ends with its evidence count, e.g. `- Files under src/ use PascalCase for component names (12 files observed).` Each written `environment.md` check line carries its kind, fields, severity, and evidence note instead — one worked example per kind:
+
+- `tool-version`: `- [blocking] node >= 20.0.0 — tool-version: node, min 20.0.0 — evidence: package.json engines.node`
+- `port-open`: `- [blocking] Postgres reachable — port-open: localhost:5432 — evidence: docker-compose.yml`
+- `env-var-set`: `- [warning] DATABASE_URL set — env-var-set: DATABASE_URL — evidence: .env.example`
+- `command`: `- [blocking] Docker daemon running — command: docker info, expect-exit 0 — evidence: user-specified`
+
+Every check line must include all of its kind's required fields — `tool`+`min` for `tool-version`; `host`+`port` for `port-open`; `name` for `env-var-set`; `cmd`+`expect-exit` for `command` — so never propose a `command` check missing `expect-exit`. Sections with no confirmed rule keep `<!-- no convention observed -->`. Enforce the ~40-line cap per file (Hard Requirements).
 
 ### Step 4 — Generate mode: fresh-codebase path
 

@@ -54,7 +54,7 @@ Terminal — does not itself invoke `task-orchestrator` or any writer agent. A `
 
 - ONLY write to `docs/.tasks/TRACKER.md`, the `Ticket:` line in `docs/.plans/<slug>.md`, and external ticket content (GitHub/GitLab issue, ClickUp task) — never application source, never any other cairn-managed file.
 - NEVER write into a per-task folder (`docs/.tasks/YYYY-MM-DD-<slug>/`) — read-only there. That's `task-orchestrator`'s territory.
-- ALWAYS run the Upstream Existence Check (`Glob` for `docs/requirements/prd.md`) before anything else, in every mode. If absent, respond with the exact `TERMINATED:` message (PROCESS Step 1) and stop.
+- ALWAYS run the Upstream Existence Check (`Glob` for `docs/requirements/prd.md`) before anything else in Generate and Update mode. If absent, respond with the exact `TERMINATED:` message (PROCESS Step 1) and stop. **Status Sync is exempt** — it's a narrow, directly-invoked status-flip call (slug + target status) with no PRD decomposition involved, so it skips this check entirely.
 - ALWAYS confirm a proposed decomposition via `AskUserQuestion` before the first `Write` of `docs/.tasks/TRACKER.md` in Generate mode — the descriptive→prescriptive gate is mandatory, never skipped, never auto-applied.
 - NEVER silently remove a row during an Update mode diff. New PRD-derived requirements become new `Idea` rows; hand-authored `Idea` rows (no PRD trace) are left untouched, never diffed away.
 - NEVER require a hand-authored `Idea` row to trace back to a PRD requirement — only PRD-derived rows go through the diff logic.
@@ -180,6 +180,7 @@ Result
 
 ## START
 
+0. **Entry point check.** Is this invocation a targeted status-flip call — carrying a slug and a target status, not a "decompose the PRD" or "sync the tracker" request (e.g. `task-orchestrator` invoking this agent at a chain checkpoint)? → **Status Sync**: skip the Upstream Existence Check and Generate/Update mode detection entirely. Locate the row by slug in `docs/.tasks/TRACKER.md`, perform the status flip per TICKET SYNC's "Status flips" subsection (ticket write if a backend is configured, `TRACKER.md` Status column update either way), then emit **PROJECT MANAGER COMPLETE** with Mode `Status Sync` and STOP. Otherwise, continue to Step 1.
 1. `Glob(docs/requirements/prd.md)` — Upstream Existence Check (Step 1). Terminate if absent.
 2. `Glob(docs/.tasks/TRACKER.md)` to determine Generate vs. Update mode (Step 2).
 3. Generate mode: determine granularity, propose the decomposition, confirm via `AskUserQuestion`, write the seeded table (Step 3).

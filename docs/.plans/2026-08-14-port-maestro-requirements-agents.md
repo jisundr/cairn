@@ -8,7 +8,7 @@
 
 **Tech Stack:** Markdown agent/skill files (Claude Code plugin convention — flat `agents/`, `skills/` at repo root). No application code.
 
-**Spec:** `/Users/jaysondelosreyes/cairn/docs/superpowers/specs/2026-08-14-port-requirements-engineer-design.md`
+**Spec:** `/Users/jaysondelosreyes/cairn/docs/.specs/2026-08-14-port-requirements-engineer-design.md`
 
 ## Global Constraints
 
@@ -200,7 +200,7 @@ Add writer-shared skill for cairn's writer-trio agents
 
 Shared discovery/draft/update mechanics for requirements-engineer,
 product-designer, and solution-architect, ported from maestro's
-writer-agent-guide and trimmed per docs/superpowers/specs/2026-08-14-port-requirements-engineer-design.md
+writer-agent-guide and trimmed per docs/.specs/2026-08-14-port-requirements-engineer-design.md
 (no Feature Status Gate, no Feature Scope Resolution, no automatic
 PHASE HANDOFF, no Adaptive Output Rule since none of the 10 ported
 doc types need multi-file splitting).

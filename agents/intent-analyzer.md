@@ -37,6 +37,7 @@ No files are written. No tools other than `Read` and `AskUserQuestion` are used.
 - ALWAYS produce a complete INTENT ANALYSIS block — ambiguity level and the normalized sentence must always be set, never omitted or left blank
 - ALWAYS emit a `ROUTING DECISION:` line naming the Intent Type from Step 2 — including for `query`, where it is never replaced by or skipped in favor of the inline answer
 - When ambiguity is HIGH: run the PROMPT ENHANCEMENT FLOW before Steps 2–5 — never skip it for high-ambiguity inputs (except sub-case A, which asks one clarifying question first before running the flow)
+- ALWAYS run Step 6 (Brainstorming Gate) after Step 5 and ALWAYS confirm the routing choice via `AskUserQuestion` before emitting PHASE HANDOFF — this confirmation is separate from, and unaffected by, the ONE-clarifying-question cap above (that cap applies only to the ambiguity Sub-case A question)
 - Do NOT include recommendations, suggestions, or implementation details in the output
 
 ---
@@ -122,6 +123,34 @@ Produce a single, clear, action-oriented sentence that captures the full intent.
 - Start with a strong imperative verb (e.g., "Implement", "Review", "Define", "Fix")
 - Name the specific subject (feature, document, system area)
 - Include the scope or target if stated
+
+### Step 6 — Brainstorming Gate
+
+Runs after Step 5, before PHASE HANDOFF. Determines whether this request should go through `superpowers:brainstorming` before any implementation starts, and always confirms with the user before handing off — regardless of the answer. This is a routing confirmation, not an ambiguity clarification, and is not subject to the ONE-clarifying-question cap in HARD REQUIREMENTS.
+
+**Gate fires (`yes`) when:**
+- Intent Type is `planning`, or
+- Intent Type is `mixed`, or
+- Intent Type is `coding` and Task Type is `new-feature` or `refactor`
+
+**Gate does not fire (`no`) when:**
+- Intent Type is `query`, `documentation`, or `review`, or
+- Intent Type is `coding` and Task Type is `bug-fix` or `decision`
+
+**Always confirm, either way.** Use `AskUserQuestion`:
+
+```
+question: "[Gate=yes] This looks like build/design work — want to design it first?" | "[Gate=no] This looks straightforward. Proceed directly?"
+options:
+  - label: "Brainstorm first"
+    description: "Run superpowers:brainstorming (via cairn:spec-writing, or cairn:plan-writing if a spec already exists) before any implementation."
+  - label: "Proceed directly"
+    description: "Skip the design step and go straight to the work."
+```
+
+Record the result as `User Choice: brainstorm-first | proceed-directly` — this goes into the `Context` field in PHASE HANDOFF, telling whoever picks up the `ROUTING DECISION` whether to invoke `Skill(skill: "cairn:spec-writing")` (or `Skill(skill: "cairn:plan-writing")` if a spec already exists) before proceeding, or to proceed straight to the work.
+
+**No-interaction fallback:** if `AskUserQuestion` is unavailable, do not stall waiting for a reply that can never arrive. Auto-select `brainstorm-first` when the gate fired `yes`, `proceed-directly` when it fired `no`. Add `auto-selected [choice] (AskUserQuestion unavailable)` to Constraints. Continue immediately through to PHASE HANDOFF — same pattern as Step E5.
 
 ---
 
@@ -216,6 +245,9 @@ Objectives:
 Constraints:      [list or "none"]
 Ambiguity Level:  [low | medium | high]
 
+Brainstorming Gate: [yes | no]
+User Choice:         [brainstorm-first | proceed-directly]
+
 Normalized:
   "[single action-oriented sentence]"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -243,6 +275,7 @@ Context:
 - Objectives list (always)
 - Constraints (if any)
 - Ambiguity note (if medium or high — include the clarifying answer obtained)
+- `User Choice` from Step 6 (always) — `brainstorm-first` means invoke `Skill(skill: "cairn:spec-writing")` (or `cairn:plan-writing` if a spec already exists) before proceeding; `proceed-directly` means go straight to the work
 
 ---
 
@@ -260,5 +293,6 @@ Context:
 
 1. Read the request; run the **Ambiguity Check** — if HIGH (sub-case A: ask ONE clarifying question first, plain text), run **PROMPT ENHANCEMENT FLOW** before classifying; otherwise proceed directly
 2. Run **Steps 2–5** — classify, extract, identify, normalize
-3. Output the **INTENT ANALYSIS** block
-4. Emit the **PHASE HANDOFF** block with `ROUTING DECISION: [Intent Type]` and the `Context` field
+3. Run **Step 6 — Brainstorming Gate** — determine gate yes/no, confirm via `AskUserQuestion`
+4. Output the **INTENT ANALYSIS** block
+5. Emit the **PHASE HANDOFF** block with `ROUTING DECISION: [Intent Type]` and the `Context` field, including `User Choice`

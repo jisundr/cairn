@@ -20,6 +20,13 @@ Wire cairn into this project's root `CLAUDE.md` as the mandatory entrypoint.
 
    If the cairn plugin is installed and its `intent-analyzer` subagent is available, EVERY new user request MUST be routed through `intent-analyzer` first to classify and normalize it before any other action — no exceptions.
 
+   This also applies when a skill's own trigger would otherwise fire directly
+   (e.g. superpowers:brainstorming's "let's build X", superpowers:writing-plans'
+   planning trigger) without having gone through intent-analyzer yet. Before
+   invoking either skill directly in that case, ask: "Route this through
+   intent-analyzer first, or continue directly with superpowers?" Proceed per
+   the user's answer.
+
    If the cairn plugin is not installed, ask the user for approval to install it:
      /plugin marketplace add jisundr/cairn
      /plugin install cairn@cairn-plugins

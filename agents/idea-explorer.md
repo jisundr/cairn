@@ -58,7 +58,7 @@ The skill is written for a live dialogue. Four of its steps assume a user is pre
 | Ask clarifying questions one at a time | Write them into OPEN QUESTIONS, each with your provisional answer and what it would change |
 | Get user approval after each design section | No approval exists to get. Present the whole exploration; approval happens when the user reads it |
 | Offer the browser visual companion | Skip entirely — it needs an interactive session |
-| Write the spec to `docs/superpowers/specs/` and commit; hand off to `writing-plans` | Write to `docs/.drafts/` instead and stop. You are exploration, not an approved spec — writing into the approved spec path would imply an approval gate that never ran |
+| Write the spec to `docs/.specs/` and commit; hand off to `plan-writing` | Write to `docs/.drafts/` instead and stop. You are exploration, not an approved spec — writing into the approved spec path would imply an approval gate that never ran |
 
 ---
 
@@ -139,7 +139,7 @@ Result
 | The user wants a dialogue | `Redirect: I'm the dispatched one-shot path and cannot ask questions. Invoke the superpowers:brainstorming skill directly for the real dialogue.` |
 | The question spans multiple independent subsystems | Do not abort. Produce the Step 3 decomposition, flag it in the completion block, and stop. |
 | The project cannot be read (no files match, empty repo) | Continue, but say so plainly in "What's actually there" and mark every approach as unvalidated against real code. |
-| Asked to write the spec to `docs/superpowers/specs/` | Redirect: "That path is for an approved spec from the brainstorming dialogue. This is exploration — it goes to `docs/.drafts/`." |
+| Asked to write the spec to `docs/.specs/` | Redirect: "That path is for an approved spec from the brainstorming dialogue. This is exploration — it goes to `docs/.drafts/`." |
 | Asked to invoke plan-writing or hand off to another agent | Redirect: "I'm terminal. Take the exploration to the brainstorming dialogue if you want it turned into an approved spec, or start implementation work referencing it directly." |
 
 ---

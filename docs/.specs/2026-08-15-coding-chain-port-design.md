@@ -42,7 +42,7 @@ Same principle as the prior writer-trio port: maestro is a fully meshed 19-agent
 | Agent | Model | Role | Terminal? |
 |---|---|---|---|
 | `harness-engineer` | sonnet | Generate/update `.harness/*.md` from observed conventions (or, on a fresh codebase, from a direct interview — see Fresh Codebase below), `AskUserQuestion` per-rule confirm gate, evidence-based by default, ~40-line cap per file | Terminal |
-| `task-orchestrator` | sonnet | Plan Mode: create/resume `docs/.tasks/<feature-slug>.md`, draft plan, run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
+| `task-orchestrator` | sonnet | Plan Mode: create/resume `docs/.tasks/YYYY-MM-DD-<feature-slug>.md`, draft plan, run qa-engineer+software-engineer feasibility assessment, create branch via `superpowers:using-git-worktrees`. Publish Mode: consolidated commit, PR/MR via `gh`/`glab`, UAT checklist, surfaces consolidated harness-drift flag | Terminal (Publish) |
 | `qa-engineer` | sonnet | Writes tests — pre-implementation (TDD red, hard-requires `superpowers:test-driven-development`) in the chain, or post-implementation in Direct Mode | Hands off |
 | `software-engineer` | opus | Implements in-scope code, stack-agnostic, makes qa-engineer's tests pass (TDD green) | Hands off |
 | `qa-auditor` | sonnet | Independent post-impl re-verification: scoped tests, best-effort coverage report, code quality; conditional security/perf/dependency checks (tag- or software-engineer-flagged, same routing as maestro) | Hands off → task-orchestrator Publish |
@@ -93,24 +93,24 @@ Both tags stand in place of the usual evidence count, visibly distinct from obse
 
 ## Task identity & files
 
-No tracker, so no T### numbers. Task identity is a feature-name slug, matching cairn's existing `docs/.plans/YYYY-MM-DD-<feature-name>.md` naming spirit but in its own namespace:
+No tracker, so no T### numbers. Task identity is a feature-name slug, date-prefixed exactly like `docs/.plans/` and `docs/.specs/` already are:
 
-- **`docs/.tasks/<feature-slug>.md`** — owned by `task-orchestrator`, standalone format (not routed through `plan-writing`/`writing-plans` — a deliberate divergence from the "hard-required, never reimplemented" pattern for plan *authoring* specifically, while still hard-requiring `superpowers:using-git-worktrees` for the *worktree/git mechanics*). Committed/versioned like `docs/.plans/`, not gitignored state.
+- **`docs/.tasks/YYYY-MM-DD-<feature-slug>.md`** — owned by `task-orchestrator`, standalone format (not routed through `plan-writing`/`writing-plans` — a deliberate divergence from the "hard-required, never reimplemented" pattern for plan *authoring* specifically, while still hard-requiring `superpowers:using-git-worktrees` for the *worktree/git mechanics*). Committed/versioned like `docs/.plans/`, not gitignored state. Date prefix means collision is only possible same-day same-slug — `task-orchestrator` just asks (resume vs. new slug) if that happens.
 - **`docs/.plans/`** stays exactly what it is today — output of `plan-writing`/`writing-plans` for architectural brainstorming work. No overlap between the two directories.
 
 **`## Task State` section**, inside the task file, two parts:
-- `### Current` — overwritten by whichever agent just finished: phase, handoff target, status, key info the next agent needs right now. Read this first — top of file, one glance shows where things stand.
+- `### Current` — overwritten by whichever agent just finished: phase, handoff target, status, worktree path + branch name (every downstream agent reads this first and operates in that worktree — the one place worktree identity is recorded, no separate marker file), key info the next agent needs right now. Read this first — top of file, one glance shows where things stand.
 - `### History` — append-only, one summarized line per completed phase (not full detail — that lives in git history / actual test output).
 
 **UAT checklist** — `task-orchestrator` Publish Mode generates a short manual-verification checklist from the task's scope, included in the PR/MR body. Kept from maestro; useful even solo as a pre-merge sanity pass.
 
 ## VCS / Publish
 
-`task-orchestrator` Publish Mode targets both GitHub (`gh`) and GitLab (`glab`) — detects remote host, uses the matching CLI. Consolidated commit, UAT checklist, PR/MR creation.
+`task-orchestrator` Publish Mode targets both GitHub (`gh`) and GitLab (`glab`) — detects remote host from `origin` (if a repo has both a GitHub and GitLab remote, `origin` wins; no multi-remote publish), uses the matching CLI. Consolidated commit, UAT checklist, PR/MR creation.
 
 ## New command: `/cairn-run-task`
 
-`/cairn-run-task <feature-slug>` — creates or resumes `docs/.tasks/<feature-slug>.md` and runs the chain from wherever its `### Current` state left off. Still also reachable via plain natural-language request through `intent-analyzer`'s normal routing; this command is a direct entry point for the "call task, let it run" usage pattern.
+`/cairn-run-task <feature-slug>` — creates or resumes `docs/.tasks/YYYY-MM-DD-<feature-slug>.md` and runs the Chain flow from wherever its `### Current` state left off. Chain-flow only, since Direct flow never creates a task file — small bug-fixes stay natural-language-only through `intent-analyzer`'s normal routing, no command entry point for them. Still also reachable via plain natural-language request for Chain-flow work; this command is a direct entry point for the "call task, let it run" usage pattern.
 
 ## Open questions
 

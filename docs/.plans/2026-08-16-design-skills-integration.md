@@ -445,7 +445,7 @@ UI Layout Specification and Design System also run a soft-optional Design Qualit
 
 Find the sentence:
 ```
-Stack-agnostic — no per-stack guide skill: infers conventions from the repo itself plus `.harness/architecture.md`/`standards.md` when present.
+Stack-agnostic — no per-stack guide skill; infers conventions from the repo itself plus `.harness/architecture.md`/`standards.md` when present.
 ```
 
 Insert immediately after it (same paragraph):

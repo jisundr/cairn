@@ -66,7 +66,7 @@ Search for: `TODO`/`FIXME`/`HACK`/`XXX` debt markers; secret-shaped assignments 
 
 ### Step 5 — Dead-code / smell pass (best-effort)
 
-First, invoke `Skill(skill: "graphify-context")` for the detection contract, then attempt `Skill(skill: "graphify")` per that contract. If it succeeds, query the graph for unreferenced symbols/exports — a graph-corroborated finding is promoted to `LOW`/`MEDIUM` per Step 6 (same corroboration treatment a Step 3 tool hit already gets). If it fails, skip silently and fall back to the grep-only approach below.
+First, invoke `Skill(skill: "graphify-context")` for the detection contract, then attempt `Skill(skill: "graphify")` per that contract. If it fails, skip silently and fall back to the grep-only approach below. If it succeeds, query the graph for unreferenced symbols/exports — a graph-corroborated finding is promoted to `LOW`/`MEDIUM` per Step 6 (same corroboration treatment a Step 3 tool hit already gets).
 
 Note obviously unreferenced files or exports where discoverable via `Grep` cross-reference (e.g. a named export with zero import hits repo-wide). This is inherently incomplete without language-aware tooling — label findings from this step `INFO` unless corroborated by a Step 3 tool or a successful Graphify query, and say so rather than presenting grep-level guesses as certain.
 

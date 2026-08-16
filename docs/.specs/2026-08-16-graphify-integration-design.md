@@ -81,6 +81,8 @@ No unit-testable surface changes (`tests/test_usage_dashboard.py`'s scope is unt
 
 Graphify's public MCP-tools-reference page (`graphify.com/docs/mcp-tools`) returned 404 at investigation time, and its GitHub README doesn't enumerate exact MCP tool names. Before writing the implementation plan, install Graphify and inspect `graphify --mcp`'s actual tool list (`query_graph`, `get_neighbors`, `shortest_path`, and others were referenced in secondary sources but not confirmed against the primary source) to pin the exact call shapes `cairn:graphify-context` documents.
 
+This was never resolved before merge — Graphify was not installed and its tool list was never ground-truthed. It's now tracked as a known limitation documented in `graphify-context`'s "Known limitations" section rather than as a blocking prerequisite.
+
 ## Versioning
 
 Behavior change to 8 already-wired agents plus one new skill — bump `.claude-plugin/plugin.json` per `CLAUDE.md`'s Versioning section (minor, new feature) once implemented.

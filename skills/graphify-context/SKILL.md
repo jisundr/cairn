@@ -5,7 +5,7 @@ description: Detection contract and query guidance for Graphify, a soft-optional
 
 # Graphify Context — shared detection and query guidance
 
-Graphify (`Graphify-Labs/graphify`) is a vendored third-party code-graph tool, never shipped or reimplemented by cairn — same "hard-required, never reimplemented" family as `superpowers`/`marketing-skills`, except here the requirement level is **soft**: every agent that loads this skill degrades silently to its own existing `Read`/`Glob`/`Grep` approach if Graphify isn't installed. See `docs/.specs/2026-08-16-graphify-integration-design.md` for the full rationale and scope decision.
+Graphify (`Graphify-Labs/graphify`) is a globally-installed third-party code-graph tool, never shipped or reimplemented by cairn — same "hard-required, never reimplemented" family as `superpowers`/`marketing-skills`, except here the requirement level is **soft**: every agent that loads this skill degrades silently to its own existing `Read`/`Glob`/`Grep` approach if Graphify isn't installed. See `${CLAUDE_PLUGIN_ROOT}/docs/.specs/2026-08-16-graphify-integration-design.md` for the full rationale and scope decision — a bare `docs/...` path would resolve against the consuming project's cwd, not the plugin's install location, and fail.
 
 ## Detection contract
 
@@ -14,6 +14,10 @@ Graphify registers globally at `~/.claude/skills/graphify/SKILL.md` — not proj
 1. Attempt `Skill(skill: "graphify")` once.
 2. **If it fails** (not installed) — skip silently, proceed with the calling agent's normal `Read`/`Glob`/`Grep` approach. Never `ABORT`, never emit a `HARNESS FLAG:` for its absence — a missing third-party skill is expected steady-state, not a fault.
 3. **If it succeeds** — use it per the guidance below for the rest of the calling step, then return control to the agent's normal flow.
+
+## Known limitations
+
+The exact skill name (`graphify`) and invocation shape documented above were not ground-truthed against an actual Graphify install at the time this integration was written — if the real skill registers under a different name, every attempt in step 1 above simply fails and falls back per step 2, so the blast radius of a wrong name is a silent no-op, never a break. Separately, if Graphify's own skill drives its CLI via `Bash`, the pass is a structural no-op in any calling agent that doesn't carry `Bash` in its `tools:` (currently `documentation-auditor` and `solution-architect`) — this is a known gap, not a bug to work around by speculatively granting `Bash` to agents that are deliberately scoped without it.
 
 ## When to prefer a graph query over grep/Read
 

@@ -5,7 +5,7 @@ description: Shared template assets for cairn's coding-chain agents (project-man
 
 # Coding Chain Shared — Template Assets
 
-Shared file templates used across the coding chain. This is an **asset bundle, not an invoked skill**: no agent calls `Skill(skill: "coding-chain-shared")` — `harness-engineer` and `project-manager` don't even carry `Skill` in their `tools:` list. Instead, each agent `Read`s the specific template it needs directly by path at the point it seeds a file, using `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/...` (the plugin's own install location — a bare `skills/...` path would resolve against the consuming project's cwd and fail).
+Shared file templates used across the coding chain. This is an **asset bundle, not an invoked skill**: no agent calls `Skill(skill: "coding-chain-shared")` — `project-manager` doesn't even carry `Skill` in its `tools:` list, and `harness-engineer` carries it only for `graphify-context`. Instead, each agent `Read`s the specific template it needs directly by path at the point it seeds a file, using `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/...` (the plugin's own install location — a bare `skills/...` path would resolve against the consuming project's cwd and fail).
 
 ## Templates in this bundle
 

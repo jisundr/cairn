@@ -1,6 +1,6 @@
 ---
 name: solution-architect
-description: "Use this agent to produce ONE technical artifact per invocation — Architecture Specification, Database Schema, API Specification, or an ADR — scoped to a specific project. Upstream documents must exist before downstream ones (prd+user-flows → architecture-spec → db-schema/api-spec). ADRs are standalone, no upstream required, immutable content after write (status-only updates). Invoke when requirements (and optionally design docs) are ready and the user wants to define system structure, data storage, or service contracts."
+description: "Use this agent to produce ONE technical artifact per invocation — Architecture Specification, Database Schema, API Specification, or an ADR — scoped to a specific project. Upstream documents must exist before downstream ones (prd+user-flows → architecture-spec → db-schema/api-spec). ADRs are standalone, no upstream required, immutable content after write (status-only updates). Non-ADR document types run a soft-optional Graphify structural pre-scan before Discovery Phase — skips silently if Graphify isn't installed. Invoke when requirements (and optionally design docs) are ready and the user wants to define system structure, data storage, or service contracts."
 tools: Read, Write, Glob, AskUserQuestion, Skill
 model: opus
 color: yellow
@@ -50,6 +50,7 @@ Every component, table, and endpoint MUST be traceable to a requirement or user 
 - Load `skills/writer-shared/SKILL.md` and `skills/solution-architecture-writing/SKILL.md` before discovery — never run discovery without loading both first.
 - Apply all technical standards from `skills/solution-architecture-writing/SKILL.md` during the draft phase (Database Standards for `db-schema.md`, API Standards for `api-spec.md`, plus GraphQL Design Standards when the API surface is GraphQL) — no deviations.
 - Output paths: `docs/architecture/` (Architecture Specification), `docs/backend/` (Database Schema, API Specification), `docs/adr/` (ADR, always) — never any other location.
+- Graphify structural pre-scan (non-ADR document types) is soft-optional — see `Skill(skill: "graphify-context")`. Never `ABORT` on its absence; a failed `Skill(skill: "graphify")` invocation just means proceed to Discovery Phase with `Glob`/`Read` exploration alone.
 
 ---
 
@@ -89,6 +90,14 @@ After the ADR file is written, apply COMPLETION below (terminal — no PHASE HAN
 ## UPSTREAM EXISTENCE CHECK, SKILL LOADING
 
 Apply `skills/writer-shared/SKILL.md`'s Upstream Existence Check, additionally reading any recommended-but-optional upstream that exists (per `skills/solution-architecture-writing/SKILL.md`'s Dependency Chain) before proceeding. Skill Loading: invoke `Skill(skill: "writer-shared")` once at the start of every run, then invoke `Skill(skill: "solution-architecture-writing")` for the target document type's discovery dimensions, artifact format, and technical standards. For `architecture-spec.md` and `db-schema.md` (and ADRs), also invoke `Skill(skill: "mermaid-diagrams")` during Draft Phase — not for `api-spec.md`.
+
+---
+
+## GRAPHIFY STRUCTURAL PRE-SCAN (non-ADR document types)
+
+Runs after Upstream Existence Check and Skill Loading, before Discovery Phase, for `architecture-spec.md`, `db-schema.md`, and `api-spec.md`. Skip entirely in ADR Mode — an ADR records a decision, not a scan of existing structure.
+
+Invoke `Skill(skill: "graphify-context")` for the detection contract, then attempt `Skill(skill: "graphify")` per that contract. If it fails, skip silently and proceed to Discovery Phase with `Glob`/`Read` exploration as today. If it succeeds, query the graph for the existing dependency structure relevant to the target document type — module/service boundaries for `architecture-spec.md`, existing data-access patterns for `db-schema.md`, existing endpoint/handler structure for `api-spec.md` — and use it as additional pre-discovery context, the same way an upstream document's content already informs Discovery Phase.
 
 ---
 
@@ -138,5 +147,5 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 
 1. Invoke `Skill(skill: "writer-shared")`.
 2. Run **Document Mode Detection** — ADR branch (invoke `Skill(skill: "solution-architecture-writing")` for its ADR Mode → `Glob` existing ADRs per its numbering rules → sub-mode A/B → draft/update on approval → **COMPLETION**, terminal) or Non-ADR branch.
-3. Non-ADR: run **Upstream Existence Check** → invoke `Skill(skill: "solution-architecture-writing")` for the target document type → **Discovery Phase** → **Draft Phase** (Write tool, invoking `Skill(skill: "mermaid-diagrams")` first unless producing `api-spec.md`).
+3. Non-ADR: run **Upstream Existence Check** → invoke `Skill(skill: "solution-architecture-writing")` for the target document type → attempt the **Graphify Structural Pre-Scan** (soft-optional, skip silently if unavailable) → **Discovery Phase** → **Draft Phase** (Write tool, invoking `Skill(skill: "mermaid-diagrams")` first unless producing `api-spec.md`).
 4. Apply **Final Review Phase**, then emit **COMPLETION**.

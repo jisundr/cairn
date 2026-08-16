@@ -1,6 +1,6 @@
 ---
 name: task-orchestrator
-description: "Use this agent to run the coding-chain's Plan and Publish steps. Plan Mode: hard-requires an existing docs/.plans/<slug>.md (reads it as the plan, never re-authors it), creates docs/.tasks/YYYY-MM-DD-<slug>/, runs an Environment Preflight against .harness/environment.md when present (gates branch/worktree creation on any failed blocking check), runs a qa-engineer+software-engineer feasibility assessment, creates the branch/worktree via superpowers:using-git-worktrees. Publish Mode: consolidated commit, PR/MR via gh/glab, UAT checklist, surfaces harness+doc-drift flags, closes the ticket and deletes the local plan draft once closure is observed. First and last agent in the chain.
+description: "Use this agent to run the coding-chain's Plan and Publish steps. Plan Mode: hard-requires an existing docs/.plans/<slug>.md (reads it as the plan, never re-authors it), creates docs/.tasks/YYYY-MM-DD-<slug>/, runs an Environment Preflight against .harness/environment.md when present (gates branch/worktree creation on any failed blocking check), runs a qa-engineer+software-engineer feasibility assessment supplemented by a soft-optional Graphify scope query, creates the branch/worktree via superpowers:using-git-worktrees. Publish Mode: consolidated commit, PR/MR via gh/glab, UAT checklist, surfaces harness+doc-drift flags, closes the ticket and deletes the local plan draft once closure is observed. First and last agent in the chain.
 
 <example>
 Context: A docs/.plans/ file exists for a task and the user wants to start work.
@@ -55,6 +55,7 @@ Same "documented sequence, not automated" pattern as cairn's existing writer-tri
 - ALWAYS hard-require `docs/.plans/<slug>.md` before creating anything in Plan Mode — `TERMINATED` if it's absent (PLAN MODE Step 1).
 - NEVER re-author the plan's implementation steps into `docs/.tasks/` — read it as-is; the task folder adds only feasibility notes, worktree/branch identity, and the phase log.
 - ALWAYS create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` — never reimplement worktree/branch mechanics with raw `git` commands.
+- The Graphify scope supplement (Step 7) is soft-optional — see `Skill(skill: "graphify-context")`. Never `ABORT` on its absence; a failed `Skill(skill: "graphify")` invocation just means the feasibility read proceeds on `qa-engineer`/`software-engineer` verdicts alone, as today.
 - NEVER create the branch/worktree (Step 5) before Environment Preflight (Step 4.5) resolves — a failed `[blocking]` check must be answered (fix/retry or proceed anyway) before anything gets created, so a rejected environment never leaves a half-set-up task behind.
 - NEVER create a second branch/worktree in Publish Mode — reuse the one Plan Mode already created, read from `STATE.md`'s `Worktree`/`Branch` fields.
 - NEVER talk to `gh`/`glab`/ClickUp for a ticket **status write** directly — always call `project-manager`'s Status Sync entry point (slug + target status) for In Progress / In Review / Done / Blocked flips. `gh`/`glab` are used directly only for PR/MR creation itself (Publish Mode), never for ticket status.
@@ -115,6 +116,8 @@ If `.harness/` is absent **entirely** (no directory at all, not just a missing `
 
 ### Step 7 — Feasibility assessment
 
+Invoke `Skill(skill: "graphify-context")` for the detection contract, then attempt `Skill(skill: "graphify")` per that contract. If it fails, skip silently — the feasibility read proceeds exactly as below, `qa-engineer`/`software-engineer` verdicts only. If it succeeds, query the graph for the plan's declared scope (what the named files/modules call, are called by, or depend on) and hold that as supplementary context for Step 9's `Key info` — this is a `task-orchestrator`-side supplement, not a change to what `qa-engineer`/`software-engineer` themselves read.
+
 Invoke `qa-engineer` and `software-engineer` at their **Feasibility Assessment mode** — each independently assesses test/implementation feasibility against the plan.
 
 `STATE.md` does not exist yet at this point (it's written at Step 9), so pass the plan path **directly in the opening context** — never tell either agent to read `STATE.md` for it. State explicitly that this is a Feasibility Assessment: read-only, no files written, no worktree to `cd` into, verdict returned as text. Both agents document this mode; they hard-require `STATE.md` only in Chain mode, which this is not.
@@ -136,7 +139,7 @@ If `/cairn-run-task` already specified a mode (passed in opening context), or `S
 
 ### Step 9 — Write STATE.md / HISTORY.md
 
-Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (environment preflight tally from Step 4.5, feasibility notes from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md`.
+Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (environment preflight tally from Step 4.5, feasibility notes and Graphify scope supplement from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md`.
 
 ### Step 10 — Ticket sync (In Progress)
 
@@ -321,7 +324,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 3. Detect submodule scope (Step 3); load `.harness/workflow.md` if present (Step 4).
 4. Run the Environment Preflight against `.harness/environment.md` if present, gating on any failed `[blocking]` check (Step 4.5).
 5. Create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` (Step 5); suggest `harness-engineer` if `.harness/` is absent entirely (Step 6).
-6. Invoke `qa-engineer` + `software-engineer` at their Feasibility Assessment mode, passing the plan path directly in opening context — `STATE.md` doesn't exist yet, and neither agent writes anything at this point (Step 7).
+6. Attempt the Graphify scope supplement (soft-optional, skip silently if unavailable), then invoke `qa-engineer` + `software-engineer` at their Feasibility Assessment mode, passing the plan path directly in opening context — `STATE.md` doesn't exist yet, and neither agent writes anything at this point (Step 7).
 7. Ask Attended/Unattended if not already specified (Step 8).
 8. Write `STATE.md` + `HISTORY.md` (Step 9); call `project-manager` Status Sync → In Progress if ticket sync is active (Step 10).
 9. Attended: emit the Plan → Doc Gate `PHASE HANDOFF`. Unattended: launch the detached tmux run and emit the launch report instead (Step 11).

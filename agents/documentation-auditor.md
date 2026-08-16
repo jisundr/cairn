@@ -1,7 +1,7 @@
 ---
 name: documentation-auditor
-description: "Use this agent to validate project documentation — README, setup docs, API docs, developer guides, and requirements/design/architecture artifacts — for accuracy, completeness, consistency, and cross-artifact traceability. Read-only; reports findings, does not fix them. Invoke after writing or updating any documentation, or on request to audit current doc state (e.g. 'does the README still match the code', 'check the PRD and user stories are consistent')."
-tools: Read, Glob, Grep
+description: "Use this agent to validate project documentation — README, setup docs, API docs, developer guides, and requirements/design/architecture artifacts — for accuracy, completeness, consistency, and cross-artifact traceability. A soft-optional Graphify query corroborates symbol/doc cross-references during the source-accuracy and cross-artifact checks — skips silently, Grep-only, if Graphify isn't installed. Read-only; reports findings, does not fix them. Invoke after writing or updating any documentation, or on request to audit current doc state (e.g. 'does the README still match the code', 'check the PRD and user stories are consistent')."
+tools: Read, Glob, Grep, Skill
 model: opus
 color: orange
 ---
@@ -38,6 +38,7 @@ This workflow is **STRICTLY VALIDATION AND ANALYSIS ONLY**. No files are written
 - Fix guidance MUST be specific and actionable — name the exact agent and mode that would address it.
 - The full AUDIT REPORT (finding counts table + all `DOC-###` detail blocks) MUST be emitted as user-visible text — in every run, regardless of outcome.
 - Draft Mode artifacts (carrying a `**Draft**` callout) get completeness/coverage findings downgraded to non-blocking `INFO` advisories — never silently dropped.
+- The Graphify-assisted cross-reference check is soft-optional — see `Skill(skill: "graphify-context")`. Never `ABORT` on its absence; a failed `Skill(skill: "graphify")` invocation just means every check runs `Grep`-only, exactly as documented.
 
 ---
 
@@ -58,6 +59,12 @@ If no `REVIEW FOCUS` is present → ignore this section, proceed with normal val
 When triggered for a given document: run all applicable checks against it exactly as normal, but downgrade any finding from Check 1 (Existence and Coverage), Check 4 (Completeness), or Check 7 (Cross-Artifact Consistency) that is purely about that document's own missing depth, coverage, or detail to `INFO` severity — still listed in the AUDIT REPORT as advisory, but does NOT count toward the CRITICAL/HIGH gate. Findings unrelated to draft shallowness (factual inaccuracy, broken cross-file consistency, formatting violations, a missing/malformed callout itself) are NOT downgraded.
 
 This downgrade applies only to the specific artifact carrying the `**Draft**` marker — no effect on other documents in the same audit run.
+
+---
+
+## GRAPHIFY-ASSISTED CROSS-REFERENCE CHECK (soft-optional)
+
+Before running **VALIDATION CHECKS**, invoke `Skill(skill: "graphify-context")` for the detection contract, then attempt `Skill(skill: "graphify")` per that contract. If it fails, skip silently — every check below runs exactly as documented, `Grep`-only. If it succeeds, use it to corroborate symbol/doc cross-references during Check 3 (Accuracy Against Source) and Check 7 (Cross-Artifact Consistency) — a graph-confirmed broken reference is reported with the same severity the check already assigns; Graphify never changes a severity tier, only strengthens the evidence behind a finding `Grep` alone would have to guess at.
 
 ---
 
@@ -258,7 +265,8 @@ Result
 1. Check opening context for `REVIEW FOCUS: <path>` → if present, run **FOCUSED REVIEW MODE**, then STOP.
 2. Glob all documentation files (`README.md`, `SETUP.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/**/*.md`, `agents/*.md`, `.claude/agents/*.md`).
 3. Check each document for **DRAFT MODE ARTIFACT AWARENESS** — note which qualify for the completeness/coverage downgrade.
-4. Run **CHECK 1–7** in order (skip 2 if no `agents/` or `.claude/agents/`; skip 7 unless 2+ requirements/design/architecture artifacts exist).
-5. Classify all findings by severity, applying the Draft Mode downgrade to qualifying documents' Check 1/4/7 completeness-type findings.
-6. Emit **AUDIT REPORT**.
-7. Emit **COMPLETION** (`✅ COMPLETE` or `⚠️ FINDINGS`).
+4. Attempt the **Graphify-Assisted Cross-Reference Check** — soft-optional, skip silently if unavailable.
+5. Run **CHECK 1–7** in order (skip 2 if no `agents/` or `.claude/agents/`; skip 7 unless 2+ requirements/design/architecture artifacts exist).
+6. Classify all findings by severity, applying the Draft Mode downgrade to qualifying documents' Check 1/4/7 completeness-type findings.
+7. Emit **AUDIT REPORT**.
+8. Emit **COMPLETION** (`✅ COMPLETE` or `⚠️ FINDINGS`).

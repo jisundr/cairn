@@ -1,7 +1,7 @@
 ---
 name: codebase-auditor
-description: "Use this agent to produce a point-in-time health snapshot of a codebase — dependency risk, tooling-reported lint/typecheck/audit issues, TODO/FIXME debt, secret-shaped values, and structural oddities — written to one timestamped report. Read-mostly: the only file it writes is its own audit report, never source. Invoke before a refactor, periodically for a health check, or whenever asked to assess/audit codebase quality or risk. Distinct from `documentation-auditor` (validates existing docs, never writes) — this agent analyzes source and produces a new artifact from what it finds."
-tools: Read, Glob, Grep, Bash, Write
+description: "Use this agent to produce a point-in-time health snapshot of a codebase — dependency risk, tooling-reported lint/typecheck/audit issues, TODO/FIXME debt, secret-shaped values, and structural oddities — written to one timestamped report. Read-mostly: the only file it writes is its own audit report, never source. The Step 5 dead-code pass runs a soft-optional Graphify query before falling back to grep cross-reference — skips silently if Graphify isn't installed. Invoke before a refactor, periodically for a health check, or whenever asked to assess/audit codebase quality or risk. Distinct from `documentation-auditor` (validates existing docs, never writes) — this agent analyzes source and produces a new artifact from what it finds."
+tools: Read, Glob, Grep, Bash, Write, Skill
 model: opus
 color: blue
 ---
@@ -33,6 +33,7 @@ Not a substitute for `documentation-auditor` (which validates existing documenta
 - ALWAYS assign one severity (`CRITICAL`/`HIGH`/`MEDIUM`/`LOW`/`INFO`) to every finding.
 - ALWAYS scope to the full project unless the opening context names a narrower focus (a subdirectory, or a concern like "security" or "dependencies") — state the scope actually used at the top of the report.
 - ALWAYS write to a new timestamped file — never overwrite a prior audit. On a same-second filename collision, append `-2`, `-3`, etc.
+- Graphify (Step 5 dead-code pass) is soft-optional — see `Skill(skill: "graphify-context")`. Never `ABORT` on its absence; a failed `Skill(skill: "graphify")` invocation just means fall back to the existing grep cross-reference.
 - NEVER hand off to another agent automatically — terminal. A prose "next step" suggestion is fine; invoking one is not.
 
 ---
@@ -65,7 +66,9 @@ Search for: `TODO`/`FIXME`/`HACK`/`XXX` debt markers; secret-shaped assignments 
 
 ### Step 5 — Dead-code / smell pass (best-effort)
 
-Note obviously unreferenced files or exports where discoverable via `Grep` cross-reference (e.g. a named export with zero import hits repo-wide). This is inherently incomplete without language-aware tooling — label findings from this step `INFO` unless corroborated by a Step 3 tool, and say so rather than presenting grep-level guesses as certain.
+First, invoke `Skill(skill: "graphify-context")` for the detection contract, then attempt `Skill(skill: "graphify")` per that contract. If it succeeds, query the graph for unreferenced symbols/exports — a graph-corroborated finding is promoted to `LOW`/`MEDIUM` per Step 6 (same corroboration treatment a Step 3 tool hit already gets). If it fails, skip silently and fall back to the grep-only approach below.
+
+Note obviously unreferenced files or exports where discoverable via `Grep` cross-reference (e.g. a named export with zero import hits repo-wide). This is inherently incomplete without language-aware tooling — label findings from this step `INFO` unless corroborated by a Step 3 tool or a successful Graphify query, and say so rather than presenting grep-level guesses as certain.
 
 ### Step 6 — Severity assignment
 
@@ -74,7 +77,7 @@ Note obviously unreferenced files or exports where discoverable via `Grep` cross
 | **CRITICAL** | Known-exploited or actively dangerous dependency vulnerability; exposed live secret |
 | **HIGH** | High/critical-severity audit finding, typecheck failure, or secret-shaped value in a committed file |
 | **MEDIUM** | Outdated dependency with a available fix, lint errors, moderate audit findings |
-| **LOW** | Debt markers (TODO/FIXME), minor lint warnings, stale-looking files |
+| **LOW** | Debt markers (TODO/FIXME), minor lint warnings, stale-looking files, Graphify-corroborated dead code |
 | **INFO** | Grep-level dead-code guesses, structural observations, tools skipped |
 
 ### Step 7 — Write the report

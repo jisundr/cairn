@@ -222,6 +222,25 @@ def build_task_report(cwd: str, projects_root: Path, slug: str) -> str:
     return "\n".join(lines)
 
 
+def build_window_report(cwd: str, projects_root: Path, start_iso: str, end_iso: str) -> str:
+    """Markdown usage table for a single time window — Lightweight mode's variant of
+    build_task_report, for paths with no HISTORY.md/task folder to read phases from."""
+    windows = [("Work", start_iso, end_iso)]
+    stats = usage_by_windows(cwd, projects_root, windows)
+    row = stats["Work"]
+    tokens = sum(row[f] for f in USAGE_FIELDS)
+
+    lines = [
+        "| Phase | Tokens | Cost |",
+        "|---|---|---|",
+        f"| Work | {tokens:,} | ${row['cost']:.2f} |",
+        f"| **Total** | **{tokens:,}** | **${row['cost']:.2f}** |",
+    ]
+    if row["unpriced_calls"]:
+        lines.append(f"_{row['unpriced_calls']} call(s) used a model with no pricing entry — excluded from cost._")
+    return "\n".join(lines)
+
+
 def encode_project_dir(cwd: str) -> str:
     return cwd.replace("/", "-")
 
@@ -889,6 +908,15 @@ def main():
         slug = sys.argv[2]
         cwd = sys.argv[3] if len(sys.argv) > 3 else str(Path.cwd())
         print(build_task_report(cwd, projects_root, slug))
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--window-report":
+        if len(sys.argv) < 4:
+            print("usage: usage_dashboard.py --window-report <start-iso> <end-iso> [cwd]", file=sys.stderr)
+            sys.exit(1)
+        start_iso, end_iso = sys.argv[2], sys.argv[3]
+        cwd = sys.argv[4] if len(sys.argv) > 4 else str(Path.cwd())
+        print(build_window_report(cwd, projects_root, start_iso, end_iso))
         return
 
     cwd = sys.argv[1] if len(sys.argv) > 1 else str(Path.cwd())

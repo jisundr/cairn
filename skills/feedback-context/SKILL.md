@@ -19,12 +19,12 @@ One line, plain text, alongside the agent's normal error report — never a hard
 
 > "This looks like it might be a cairn bug, not something in this project — want to file feedback? I can draft a local sanitized file for you to review first."
 
-On yes, follow the Draft/Review/Push flow below.
+On yes, follow the Draft/Review/Push flow below. A tool-restricted agent (no `Write`, e.g. `documentation-auditor`, or `Write` without `Bash`, e.g. `documentation-engineer`) only ever surfaces this one-line suggestion text — it never attempts the flow itself; the flow is carried out by the orchestrating/main-thread session (which always has full tool access) or by the user running `/cairn-feedback` directly.
 
 ## Draft/Review/Push flow (shared by every entry point)
 
 1. **Gate.** Check the project's root `CLAUDE.md` for the exact line `<!-- cairn:start -->` (whole line, not just the text appearing in prose). Absent → refuse, point at `/cairn-setup`. Same check `/cairn-dashboard` already uses.
-2. **Gather.** If not already known from context: what happened, which agent/command/skill was involved, cairn version (from `.claude-plugin/plugin.json` or the latest entry in `.cairn/version-log.jsonl`).
+2. **Gather.** If not already known from context: what happened, which agent/command/skill was involved, cairn version (from `.claude-plugin/plugin.json`'s `version` field — simplest, authoritative, always present; fall back to the latest entry in `.cairn/version-log.jsonl` only if that file is somehow unavailable).
 3. **Draft.** Write `.cairn/feedback/YYYYMMDD-HHmmss-<slug>.md` (slug: short kebab-case, ad hoc from the issue description) containing ONLY the fixed field list below — nothing else, ever.
 4. **Stop.** Show the full drafted content to the user. Ask them to review/redact before anything about pushing is discussed. This is a hard stop, not a formality — never proceed to step 5 without an explicit go-ahead on this exact draft.
 5. **Offer push.** On explicit confirmation: if `gh auth status` succeeds, offer `gh issue create --repo jisundr/cairn --title <title> --body-file <path>` — ask before running it, every time, never standing permission. If `gh` is unavailable/unauthenticated, or the user declines running it, fall back to: point at `https://github.com/jisundr/cairn/issues/new` and the local file path for the user to copy-paste themselves.
@@ -33,7 +33,7 @@ On yes, follow the Draft/Review/Push flow below.
 
 - cairn version
 - Which agent/command/skill was involved (if known)
-- What happened (the error text or unexpected behavior, as reported)
+- What happened (the error text or unexpected behavior, summarized — strip or redact any absolute path or project-specific identifier before including it; never paste a raw traceback verbatim)
 - A generic repro description, in terms of cairn's own flow (e.g. "ran `/cairn-dashboard`", "task-orchestrator Plan Mode step 7") — never the consuming project's actual file paths, code, or business logic
 
 Nothing outside this list. No file contents, no absolute paths, no env var values, no repo-specific identifiers (names, URLs, internal terminology from the consuming project).

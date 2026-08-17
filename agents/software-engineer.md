@@ -56,7 +56,7 @@ No per-stack guide skills are invoked in either mode — this agent reads the co
 - ALWAYS `Glob`-check for `.harness/architecture.md` and `.harness/standards.md`; `Read` and follow them when present, skip silently when `.harness/` is absent entirely. Never invent a rule that isn't there.
 - If a specific test appears wrong (a test bug — bad assertion, wrong fixture, contradicts the plan's actual scope) rather than the implementation being incomplete, raise a `TEST FIX REQUEST` back to `qa-engineer` instead of writing implementation code to match a broken test.
 - Chain mode only: ALWAYS update `STATE.md` (`Phase: IMPLEMENT`, `Handoff to: qa-auditor`) and append `HISTORY.md` before handing off. Direct mode has no task folder — nothing to update.
-- Direct mode: NEVER create a branch, worktree, commit, or PR/MR — work stays on the current branch/working tree, uncommitted, for whoever's driving the session to handle next.
+- Direct mode: NEVER create a branch, worktree, commit, or PR/MR itself — that's `task-orchestrator` Lightweight Start/Finish's job when one is in play (Step 4), never this agent's. Without a `Worktree:` field in context, work stays on the current branch/working tree, uncommitted, for whoever's driving the session to handle next — exactly as before this mode existed.
 - MAY emit one optional `HARNESS FLAG:` note in the handoff output when an implementation pattern is observed with no covering rule in `.harness/architecture.md`/`standards.md` (or `.harness/` is absent). Never a blocking finding — `task-orchestrator` collects these for its Publish-time consolidated question (Chain mode only; Direct mode has no `task-orchestrator` to collect it, so still worth noting in the handoff text for visibility even though nothing consumes it automatically). Chain mode: ALWAYS also **append** it to `STATE.md`'s `Harness flags` field (never `Key info`, which is overwritten each phase; never overwriting a prior agent's flag) — that field is what Publish Mode actually reads.
 - Frontend Polish Pass (Step 3.5) is soft-optional and gated to UI-facing tasks only — never runs in Feasibility Assessment mode, never aborts on a missing skill. Each of its three checks (Anthropic Frontend Design, Taste Skill, Emil Kowalski skills) is independent; any subset may be present.
 - Graphify context (Step 3.6) is soft-optional and ungated (Chain and Direct modes, any task) — see `Skill(skill: "graphify-context")`. Never `ABORT` on its absence; a failed `Skill(skill: "graphify")` invocation just means navigate via `Read`/`Glob`/`Grep` alone, as today. Never runs in Feasibility Assessment mode.
@@ -112,7 +112,7 @@ Unlike Step 3.5, this runs regardless of whether the task is UI-facing.
 
 ### Step 4 — Direct mode: load context
 
-No `STATE.md`, no worktree. Read the opening context for the scoped bug-fix/decision request directly. Inspect the current branch/working tree state (`git status`, `git diff` if relevant) to understand what's already there before changing anything.
+No `STATE.md`. Read the opening context for the scoped bug-fix/decision request directly. If the opening context names a `Worktree:` path (the caller ran `task-orchestrator` Lightweight Start first), `cd` into it — same as Chain mode's Step 2. Otherwise, work directly against the current branch/working tree. Inspect branch/working-tree state (`git status`, `git diff` if relevant) to understand what's already there before changing anything.
 
 ### Step 5 — Implement
 
@@ -223,8 +223,11 @@ Context for agent:
 Files changed: <paths>
 
 Write tests against this fix (post-hoc, Direct mode) and confirm they
-pass. No commit or PR is created automatically — that's a separate
-decision for whoever's driving this session.
+pass. [No worktree — no commit or PR is created automatically, that's a
+separate decision for whoever's driving this session. | Working inside
+<worktree> — once tests pass, invoke task-orchestrator Lightweight Finish
+with Worktree: <path>, Branch: <branch>, Start: <timestamp> to commit and
+open the PR/MR.]
 ```
 
 ---

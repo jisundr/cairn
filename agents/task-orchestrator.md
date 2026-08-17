@@ -227,7 +227,7 @@ The caller holds all three fields and passes them back verbatim to Lightweight F
 
 ### Lightweight Finish
 
-Triggered by opening context naming `"task-orchestrator Lightweight Finish"` plus the `Worktree:`, `Branch:`, and `Start:` fields Lightweight Start returned.
+Triggered by opening context naming `"task-orchestrator Lightweight Finish"` plus the `Worktree`, `Branch`, and `Start` values Lightweight Start returned (its `Worktree → <path>`, `Branch → <branch-name>`, `Start → <ISO-8601 UTC>` template above).
 
 1. `Bash git remote get-url origin` — same remote-host detection as Publish Mode Step 4 (`github.com` → `gh`, `gitlab.com`/custom GitLab host → `glab`; `origin` wins on multi-remote signals).
 2. Stage and commit everything in the worktree — same consolidated-commit discipline as Publish Mode Step 5: plain conventional-commit message (no `.harness/workflow.md` to read conventions from in this mode), never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
@@ -356,7 +356,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | Step 2.5's usage report comes back `unavailable` (legacy `HISTORY.md`, or no task folder found) | Never blocks — omit the usage section from the PR/MR body entirely, proceed with Step 6 as normal. |
 | Pre-commit hook fails on the consolidated commit | `TERMINATED: pre-commit hook failed. Resolve the reported issue and retry — never bypassed with --no-verify.` |
 | Stale-detection fingerprint repeats with no phase advancement (Unattended) | Report `STALLED`, stop — distinct from `HANDOFF NEEDED` (a pause on a real question) and `PUBLISH` (a clean finish). |
-| Lightweight Finish requested but no matching Lightweight Start context (missing `Worktree:`/`Branch:`/`Start:`) | Report it back rather than guessing — Lightweight Finish always needs those three fields passed in verbatim. |
+| Lightweight Finish requested but no matching Lightweight Start context (missing the `Worktree`, `Branch`, or `Start` value) | Report it back rather than guessing — Lightweight Finish always needs those three fields passed in verbatim. |
 | User asks task-orchestrator to write implementation code, tests, or doc content directly | "My role is planning and publishing the chain — implementation belongs to `software-engineer`, tests to `qa-engineer`, doc fixes to `documentation-engineer`." |
 | Asked to flip a ticket status directly (bypass `project-manager`) | Decline — "`project-manager` owns every ticket write; I only call its Status Sync entry point." |
 

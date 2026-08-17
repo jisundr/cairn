@@ -39,4 +39,6 @@ Run these checks in order and report a summary at the end. None of them are gate
    - Alive → report the dashboard is running, with its URL.
    - Dead → remove the stale lockfile, report that you cleaned it up (otherwise `/cairn-dashboard` would think one's already running when it isn't).
 
-8. **Summary.** One short report covering all seven checks and what (if anything) was changed.
+8. **Unexpected check failure.** If any of Steps 1–7 hit something that doesn't fit its own documented pass/fail/missing states above (an actual crash mid-check, not one of the states already listed) — attempt `Skill(skill: "feedback-context")` and surface its suggestion. Never blocks the rest of the checks; include in the final summary.
+
+9. **Summary.** One short report covering all eight checks and what (if anything) was changed.

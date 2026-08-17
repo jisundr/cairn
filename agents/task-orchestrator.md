@@ -203,6 +203,47 @@ Update `STATE.md` to `Phase: PUBLISH`, `Handoff to: none (terminal)`, PR/MR URL 
 
 ---
 
+## LIGHTWEIGHT MODE
+
+A third mode alongside Plan/Publish, for Direct flow, `superpowers:brainstorming`'s bounded path, and `documentation-engineer` doc-sync work — paths that never have a `docs/.plans/` file or a task folder, but still want a worktree and a PR/MR. Two thin entry points, invoked explicitly by name in the opening context; neither writes `STATE.md`/`HISTORY.md`/any task folder — there is none in this mode.
+
+### Lightweight Start
+
+Triggered by opening context naming `"task-orchestrator Lightweight Start"` plus `slug` and `task-type` (`direct` / `bounded` / `doc`).
+
+1. Branch name: `<task-type>/<slug>` — caller-supplied slug, since no plan file exists to source one from.
+2. Invoke `Skill(skill: "superpowers:using-git-worktrees")` — hard-required, exactly Plan Mode Step 5's mechanism, never reimplemented.
+3. Record the current UTC time (`<ISO-8601 UTC>`) as the start timestamp.
+4. Return plain text only — no `STATE.md` write:
+
+```
+LIGHTWEIGHT START COMPLETE
+Worktree → <path>
+Branch   → <branch-name>
+Start    → <ISO-8601 UTC>
+```
+
+The caller holds all three fields and passes them back verbatim to Lightweight Finish.
+
+### Lightweight Finish
+
+Triggered by opening context naming `"task-orchestrator Lightweight Finish"` plus the `Worktree:`, `Branch:`, and `Start:` fields Lightweight Start returned.
+
+1. `Bash git remote get-url origin` — same remote-host detection as Publish Mode Step 4 (`github.com` → `gh`, `gitlab.com`/custom GitLab host → `glab`; `origin` wins on multi-remote signals).
+2. Stage and commit everything in the worktree — same consolidated-commit discipline as Publish Mode Step 5: plain conventional-commit message (no `.harness/workflow.md` to read conventions from in this mode), never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
+3. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_dashboard.py --window-report <Start> <now, ISO-8601 UTC> <cwd>` via `Bash`. Best-effort: if it prints nothing usable (e.g. malformed timestamps), proceed without a usage section rather than blocking.
+4. Create the PR/MR via the CLI detected in Step 1. Body includes the usage report from Step 3 when it produced a table (omit the section entirely if it didn't — same rule as Publish Mode Step 6). Record the resulting URL.
+5. Return plain text only — no `STATE.md` to update, no ticket sync (none of Direct flow, bounded path, or doc-sync carry a ticket):
+
+```
+LIGHTWEIGHT FINISH COMPLETE
+PR/MR → <url>
+```
+
+Terminal for this invocation.
+
+---
+
 ## UNATTENDED EXECUTION
 
 Two modes total: **Attended** (default — runs in the current session like every other cairn agent) and **Unattended** (tmux-detached, ported from maestro's `swarm.sh`). Applies to Chain flow only — Direct flow never creates a task folder and has no reason to run unattended.
@@ -315,6 +356,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | Step 2.5's usage report comes back `unavailable` (legacy `HISTORY.md`, or no task folder found) | Never blocks — omit the usage section from the PR/MR body entirely, proceed with Step 6 as normal. |
 | Pre-commit hook fails on the consolidated commit | `TERMINATED: pre-commit hook failed. Resolve the reported issue and retry — never bypassed with --no-verify.` |
 | Stale-detection fingerprint repeats with no phase advancement (Unattended) | Report `STALLED`, stop — distinct from `HANDOFF NEEDED` (a pause on a real question) and `PUBLISH` (a clean finish). |
+| Lightweight Finish requested but no matching Lightweight Start context (missing `Worktree:`/`Branch:`/`Start:`) | Report it back rather than guessing — Lightweight Finish always needs those three fields passed in verbatim. |
 | User asks task-orchestrator to write implementation code, tests, or doc content directly | "My role is planning and publishing the chain — implementation belongs to `software-engineer`, tests to `qa-engineer`, doc fixes to `documentation-engineer`." |
 | Asked to flip a ticket status directly (bypass `project-manager`) | Decline — "`project-manager` owns every ticket write; I only call its Status Sync entry point." |
 
@@ -322,7 +364,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 
 ## START
 
-**Mode detection (runs first).** Read the opening context. If it explicitly requests Publish Mode (e.g. "qa-auditor/documentation-auditor Doc Post-Impl just finished clean, invoke task-orchestrator Publish Mode"), or a `docs/.tasks/<slug>/STATE.md` exists with `Phase: DOC-POST-IMPL` (written by the main-thread session per PUBLISH MODE's opening note, not by `documentation-auditor` itself, once the Doc Post-Impl report has resolved clean) and no `PUBLISH` phase yet → **Publish Mode**. Otherwise → **Plan Mode** — this covers every fresh chain start, since Plan Mode is always the chain's entry point.
+**Mode detection (runs first).** Read the opening context. If it explicitly names `"task-orchestrator Lightweight Start"` or `"task-orchestrator Lightweight Finish"` → **Lightweight mode** (see LIGHTWEIGHT MODE above) — check this first, since it's the only mode with no task folder involved at all. Otherwise, if it explicitly requests Publish Mode (e.g. "qa-auditor/documentation-auditor Doc Post-Impl just finished clean, invoke task-orchestrator Publish Mode"), or a `docs/.tasks/<slug>/STATE.md` exists with `Phase: DOC-POST-IMPL` (written by the main-thread session per PUBLISH MODE's opening note, not by `documentation-auditor` itself, once the Doc Post-Impl report has resolved clean) and no `PUBLISH` phase yet → **Publish Mode**. Otherwise → **Plan Mode** — this covers every fresh chain start, since Plan Mode is always the chain's entry point.
 
 **Plan Mode:**
 1. Upstream Existence Check — `Glob(docs/.plans/*-<slug>.md)` (Step 1). Terminate if absent.

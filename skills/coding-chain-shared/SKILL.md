@@ -25,6 +25,10 @@ Every template's headings are structural scaffolding only — content under them
 
 `PLAN` · `DOC-GATE` · `QA-RED` · `IMPLEMENT` · `QA-AUDIT` · `DOC-POST-IMPL` · `PUBLISH` — one per chain-agent invocation, in order. Plus `HANDOFF NEEDED` as an unattended-only pause state.
 
+## HISTORY.md line format
+
+Every appended line is `<ISO-8601 UTC> — <PHASE> — <note>` (e.g. `2026-08-17T14:32:00Z — PLAN — plan read, worktree created`) — the timestamp is what lets `scripts/usage_dashboard.py --task-report <slug>` correlate session usage to each phase for the PR/MR usage table (`task-orchestrator` Publish Mode). A line missing the timestamp prefix is silently skipped by that report, not an error — a task whose `HISTORY.md` predates this convention just reports usage as unavailable.
+
 ## Two fields that behave differently (`STATE.md`)
 
 `Key info` is **overwritten** every phase — it carries only what the next agent needs right now. `Harness flags` is **append-only** and accumulates across the whole chain: `qa-engineer`, `software-engineer`, and `qa-auditor` each append any `HARNESS FLAG:` note there (never to `Key info`), and `task-orchestrator` Publish Mode reads the accumulated field for its one consolidated harness/doc-drift question. Seeded as `none`; the first flag replaces that placeholder, later ones are added under it.

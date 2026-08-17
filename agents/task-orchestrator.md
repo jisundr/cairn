@@ -139,7 +139,7 @@ If `/cairn-run-task` already specified a mode (passed in opening context), or `S
 
 ### Step 9 — Write STATE.md / HISTORY.md
 
-Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (environment preflight tally from Step 4.5, feasibility notes and Graphify scope supplement from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md`.
+Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (environment preflight tally from Step 4.5, feasibility notes and Graphify scope supplement from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md` — format `<ISO-8601 UTC> — <PHASE> — <note>` (`coding-chain-shared`'s `HISTORY.md line format` convention); the timestamp is what Publish Mode's Step 2.5 usage report correlates against later.
 
 ### Step 10 — Ticket sync (In Progress)
 
@@ -169,6 +169,10 @@ Triggered after `qa-auditor` → `documentation-auditor` (Doc Post-Impl) hands o
 
 Generate a short manual-verification checklist from the task's scope (read from the plan file) → write `UAT.md`, seeded from `${CLAUDE_PLUGIN_ROOT}/skills/coding-chain-shared/assets/task/UAT.template.md`. If `.harness/workflow.md`'s `## Commits / MR` section was loaded, it governs commit message format and what the PR/MR description must include — the UAT checklist at minimum, per the template.
 
+### Step 2.5 — Usage report
+
+Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_dashboard.py --task-report <slug>` via `Bash` (from the repo root, so the script's relative `docs/.tasks/` glob resolves) and hold its markdown output for Step 6's PR/MR body. This is best-effort: the script reports `Usage: unavailable (...)` rather than erroring when `HISTORY.md` predates the timestamp convention or the task folder can't be found — in either case, just fall back to no usage section in the PR/MR body rather than blocking Publish Mode on it.
+
 ### Step 3 — Consolidated drift-flag question
 
 Collect: `STATE.md`'s `Harness flags` field (populated by `qa-engineer`/`software-engineer`/`qa-auditor` as they ran through the chain) plus this run's `documentation-auditor` (Doc Post-Impl) findings. If either is non-empty, surface **one** consolidated question via `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): run `harness-engineer` Update mode, run `documentation-engineer` for doc drift, both, or skip and publish as-is. If both are empty, skip the question and proceed directly.
@@ -183,7 +187,7 @@ Stage and commit everything, including the task folder's final state — it was 
 
 ### Step 6 — PR/MR creation
 
-Create the PR/MR via the CLI detected in Step 4, body includes the UAT checklist from Step 2 at minimum (plus whatever else `.harness/workflow.md` requires). Record the resulting URL.
+Create the PR/MR via the CLI detected in Step 4, body includes the UAT checklist from Step 2 at minimum (plus whatever else `.harness/workflow.md` requires), plus the usage report from Step 2.5 when it produced a table (omit that section entirely on its `unavailable` fallback — never include the bare "unavailable" line in the PR/MR body itself). Record the resulting URL.
 
 ### Step 7 — Ticket sync (In Review)
 
@@ -195,7 +199,7 @@ If ticket sync is active: note a follow-up check (not a blocking wait) to invoke
 
 ### Step 9 — Update STATE.md
 
-Update `STATE.md` to `Phase: PUBLISH`, `Handoff to: none (terminal)`, PR/MR URL in `Key info`. Append the final `HISTORY.md` line.
+Update `STATE.md` to `Phase: PUBLISH`, `Handoff to: none (terminal)`, PR/MR URL in `Key info`. Append the final `HISTORY.md` line — same `<ISO-8601 UTC> — PUBLISH — <note>` format as every other phase line.
 
 ---
 
@@ -280,6 +284,7 @@ TASK ORCHESTRATOR — PUBLISH COMPLETE
 Task    → docs/.tasks/YYYY-MM-DD-<slug>/
 PR/MR   → <url>
 UAT     → docs/.tasks/YYYY-MM-DD-<slug>/UAT.md
+Usage   → [included in PR/MR body | unavailable — HISTORY.md predates timestamp tracking]
 Branch  → <branch-name>
 Ticket  → <url, or none> → In Review [Done pending merge — follow-up check]
 Plan    → docs/.plans/<slug>.md [deleted once ticket closure observed | retained — no ticket sync]
@@ -307,6 +312,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | Doc Gate (or Doc Post-Impl) reports a CRITICAL or HIGH finding **related to this task's scope** | `AskUserQuestion` (Attended) / `HANDOFF NEEDED` (Unattended): proceed anyway, or stop and fix upstream docs first. |
 | Doc Gate (or Doc Post-Impl) reports a CRITICAL or HIGH finding **unrelated to this task's scope** (pre-existing repo-wide doc debt surfaced by the full audit) | Note it in `STATE.md`'s `Key info` and continue — never blocks the chain. |
 | `gh auth status` / `glab auth status` fails, or the CLI is missing, at Publish | `TERMINATED: [gh|glab] is required and authenticated to publish this task. Resolve and retry.` |
+| Step 2.5's usage report comes back `unavailable` (legacy `HISTORY.md`, or no task folder found) | Never blocks — omit the usage section from the PR/MR body entirely, proceed with Step 6 as normal. |
 | Pre-commit hook fails on the consolidated commit | `TERMINATED: pre-commit hook failed. Resolve the reported issue and retry — never bypassed with --no-verify.` |
 | Stale-detection fingerprint repeats with no phase advancement (Unattended) | Report `STALLED`, stop — distinct from `HANDOFF NEEDED` (a pause on a real question) and `PUBLISH` (a clean finish). |
 | User asks task-orchestrator to write implementation code, tests, or doc content directly | "My role is planning and publishing the chain — implementation belongs to `software-engineer`, tests to `qa-engineer`, doc fixes to `documentation-engineer`." |
@@ -331,7 +337,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 
 **Publish Mode:**
 1. Read `STATE.md`/`HISTORY.md` for chain context, `.harness/workflow.md` if loaded (Step 1).
-2. Generate and write `UAT.md` (Step 2).
+2. Generate and write `UAT.md` (Step 2); run the usage report, best-effort (Step 2.5).
 3. Surface the consolidated harness/doc-drift question if either set of flags is non-empty (Step 3).
 4. Detect the remote host (Step 4); make the consolidated commit (Step 5).
 5. Create the PR/MR with the UAT checklist (Step 6); call `project-manager` Status Sync → In Review (Step 7).

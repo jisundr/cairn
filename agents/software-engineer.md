@@ -131,7 +131,7 @@ Update `STATE.md`: `Phase: IMPLEMENT`, `Handoff to: qa-auditor`, `Status` (short
 
 Any `HARNESS FLAG:` note from Step 6 goes into `STATE.md`'s **`Harness flags`** field, not `Key info` — **appended** to whatever is already there, never overwriting a prior agent's entry (replace a lone `none` placeholder; otherwise add a new line under the existing ones). `Key info` is rewritten every phase, so a flag parked there would be lost before Publish; `Harness flags` is the field `task-orchestrator` Publish Mode Step 3 actually reads for its consolidated drift question, and it accumulates across the whole chain.
 
-Append one summarized line to `HISTORY.md`. Direct mode skips this step — there is no task folder; Feasibility Assessment mode skips it too.
+Append one summarized line to `HISTORY.md` — format `<ISO-8601 UTC> — <PHASE> — <note>` (`coding-chain-shared`'s `HISTORY.md line format` convention), the timestamp lets `usage_dashboard.py --task-report` correlate usage to this phase. Direct mode skips this step — there is no task folder; Feasibility Assessment mode skips it too.
 
 Raising a `TEST FIX REQUEST` instead of finishing the green phase: set `Handoff to: qa-engineer` and leave `Phase` where it is — the chain is mid-implementation, not restarting.
 

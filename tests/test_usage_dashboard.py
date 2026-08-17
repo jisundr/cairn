@@ -308,3 +308,153 @@ def test_parse_tracker_md_legacy_table_without_milestone_column(tmp_path):
 
 def test_parse_tracker_md_missing_file_returns_empty(tmp_path):
     assert usage_dashboard.parse_tracker_md(tmp_path / "nope.md") == []
+
+
+def test_parse_history_md_extracts_timestamped_lines(tmp_path):
+    history = tmp_path / "HISTORY.md"
+    history.write_text(
+        "# History: add-auth\n\n"
+        "<!-- Append-only. -->\n"
+        "2026-08-17T14:00:00Z — PLAN — plan read, worktree created\n"
+        "2026-08-17T14:30:00Z — DOC-GATE — clean, no findings\n"
+    )
+
+    entries = usage_dashboard.parse_history_md(history)
+
+    assert entries == [
+        {"timestamp": "2026-08-17T14:00:00Z", "phase": "PLAN", "note": "plan read, worktree created"},
+        {"timestamp": "2026-08-17T14:30:00Z", "phase": "DOC-GATE", "note": "clean, no findings"},
+    ]
+
+
+def test_parse_history_md_skips_untimestamped_lines(tmp_path):
+    history = tmp_path / "HISTORY.md"
+    history.write_text(
+        "# History: add-auth\n\n"
+        "2026-08-17T14:00:00Z — PLAN — plan read\n"
+        "some free-text note with no timestamp prefix\n"
+        "2026-08-17T14:30:00Z — DOC-GATE — clean\n"
+    )
+
+    entries = usage_dashboard.parse_history_md(history)
+
+    assert len(entries) == 2
+    assert [e["phase"] for e in entries] == ["PLAN", "DOC-GATE"]
+
+
+def test_parse_history_md_legacy_file_no_timestamps_returns_empty(tmp_path):
+    history = tmp_path / "HISTORY.md"
+    history.write_text("# History: add-auth\n\nPLAN complete, worktree created\nDOC-GATE clean\n")
+
+    assert usage_dashboard.parse_history_md(history) == []
+
+
+def test_parse_history_md_missing_file_returns_empty(tmp_path):
+    assert usage_dashboard.parse_history_md(tmp_path / "nope.md") == []
+
+
+def test_phase_windows_chains_consecutive_entries():
+    entries = [
+        {"timestamp": "2026-08-17T14:00:00Z", "phase": "PLAN", "note": "x"},
+        {"timestamp": "2026-08-17T14:30:00Z", "phase": "DOC-GATE", "note": "y"},
+        {"timestamp": "2026-08-17T15:00:00Z", "phase": "QA-RED", "note": "z"},
+    ]
+
+    windows = usage_dashboard.phase_windows(entries)
+
+    assert windows[0][0] == "PLAN"
+    assert windows[0][2] == "2026-08-17T14:00:00Z"
+    assert windows[0][1] == "2026-08-17T13:00:00Z"  # 1h lookback, no prior entry
+    assert windows[1] == ("DOC-GATE", "2026-08-17T14:00:00Z", "2026-08-17T14:30:00Z")
+    assert windows[2] == ("QA-RED", "2026-08-17T14:30:00Z", "2026-08-17T15:00:00Z")
+
+
+def test_phase_windows_empty_entries_returns_empty():
+    assert usage_dashboard.phase_windows([]) == []
+
+
+def test_usage_by_windows_buckets_turns_by_timestamp(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    _write_session(transcripts_dir, "session-a", [
+        _assistant_line("2026-08-17T13:30:00Z", "claude-sonnet-5", input_tokens=1_000_000, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+        _assistant_line("2026-08-17T14:15:00Z", "claude-sonnet-5", input_tokens=2_000_000, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+    ])
+
+    windows = [
+        ("PLAN", "2026-08-17T13:00:00Z", "2026-08-17T14:00:00Z"),
+        ("DOC-GATE", "2026-08-17T14:00:00Z", "2026-08-17T14:30:00Z"),
+    ]
+
+    stats = usage_dashboard.usage_by_windows(str(cwd), projects_root, windows)
+
+    rate = usage_dashboard.MODEL_PRICING["claude-sonnet-5"]
+    assert stats["PLAN"]["calls"] == 1
+    assert stats["PLAN"]["cost"] == pytest.approx(rate["input"])
+    assert stats["DOC-GATE"]["calls"] == 1
+    assert stats["DOC-GATE"]["cost"] == pytest.approx(rate["input"] * 2)
+
+
+def test_usage_by_windows_no_transcripts_dir_returns_zeroed_buckets(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+
+    windows = [("PLAN", "2026-08-17T13:00:00Z", "2026-08-17T14:00:00Z")]
+    stats = usage_dashboard.usage_by_windows(str(cwd), projects_root, windows)
+
+    assert stats["PLAN"]["calls"] == 0
+    assert stats["PLAN"]["cost"] == 0
+
+
+def test_build_task_report_no_task_folder_reports_unavailable(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+
+    report = usage_dashboard.build_task_report(str(cwd), projects_root, "add-auth")
+
+    assert "unavailable" in report.lower()
+
+
+def test_build_task_report_legacy_history_reports_unavailable(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    task_dir = cwd / "docs" / ".tasks" / "2026-08-17-add-auth"
+    task_dir.mkdir(parents=True)
+    (task_dir / "HISTORY.md").write_text("PLAN complete\n")
+    projects_root = tmp_path / "claude_projects"
+
+    report = usage_dashboard.build_task_report(str(cwd), projects_root, "add-auth")
+
+    assert "unavailable" in report.lower()
+    assert "predates timestamp tracking" in report.lower()
+
+
+def test_build_task_report_renders_markdown_table(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    task_dir = cwd / "docs" / ".tasks" / "2026-08-17-add-auth"
+    task_dir.mkdir(parents=True)
+    (task_dir / "HISTORY.md").write_text(
+        "2026-08-17T14:00:00Z — PLAN — plan read\n"
+        "2026-08-17T14:30:00Z — DOC-GATE — clean\n"
+    )
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+    _write_session(transcripts_dir, "session-a", [
+        _assistant_line("2026-08-17T14:10:00Z", "claude-sonnet-5", input_tokens=1_000_000, output_tokens=0,
+                         cache_creation_input_tokens=0, cache_read_input_tokens=0),
+    ])
+
+    report = usage_dashboard.build_task_report(str(cwd), projects_root, "add-auth")
+
+    assert "PLAN" in report
+    assert "DOC-GATE" in report
+    assert "Total" in report
+    assert "approximate" in report.lower()

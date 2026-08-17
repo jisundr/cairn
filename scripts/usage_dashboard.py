@@ -18,12 +18,16 @@ stdlib only, no dependencies. Serves:
 
 import http.server
 import json
+import re
 import socket
 import sys
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 DEFAULT_PORT = 4756
+PLAN_WINDOW_LOOKBACK_SECONDS = 3600  # no HISTORY.md entry precedes PLAN's own line, so approximate its start
+HISTORY_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) — ([A-Z][A-Z0-9 \-]*) — (.*)$")
 USAGE_FIELDS = (
     "input_tokens",
     "output_tokens",
@@ -85,6 +89,137 @@ def parse_tracker_md(path: Path) -> list:
             continue
         rows.append(row)
     return rows
+
+
+def parse_history_md(path: Path) -> list:
+    """Timestamped phase lines from a task's HISTORY.md: "<ISO-8601> — <PHASE> — <note>".
+
+    Lines predating this convention (no timestamp prefix) are skipped, not errored —
+    a HISTORY.md with zero matching lines just means usage reporting isn't available
+    for that task yet.
+    """
+    if not path.exists():
+        return []
+    entries = []
+    for line in path.read_text().splitlines():
+        match = HISTORY_LINE_RE.match(line.strip())
+        if match:
+            entries.append({"timestamp": match.group(1), "phase": match.group(2), "note": match.group(3)})
+    return entries
+
+
+def _parse_iso(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def _format_iso(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def phase_windows(entries: list) -> list:
+    """[(phase, window_start, window_end), ...] — each entry's timestamp closes its own
+    phase's window; the previous entry's timestamp opens it. PLAN (the first entry) has
+    no preceding line, so its window is approximated as the PLAN_WINDOW_LOOKBACK_SECONDS
+    before it closed — the same "approximate, documented" tradeoff as MODEL_PRICING.
+    """
+    if not entries:
+        return []
+    windows = []
+    for i, entry in enumerate(entries):
+        if i == 0:
+            start = _format_iso(_parse_iso(entry["timestamp"]) - timedelta(seconds=PLAN_WINDOW_LOOKBACK_SECONDS))
+        else:
+            start = entries[i - 1]["timestamp"]
+        windows.append((entry["phase"], start, entry["timestamp"]))
+    return windows
+
+
+def usage_by_windows(cwd: str, projects_root: Path, windows: list) -> dict:
+    """Turn-level (not session-level) usage bucketed by phase window.
+
+    Session-level totals aren't fine-grained enough here: a single session's transcript
+    can span every phase of a task (e.g. an Attended run stays in one conversation from
+    PLAN through PUBLISH), so bucketing has to happen per assistant turn, by that turn's
+    own timestamp, not per session.
+    """
+    buckets = {label: _empty_usage() | {"cost": 0.0, "unpriced_calls": 0} for label, _, _ in windows}
+    transcripts_dir = projects_root / encode_project_dir(cwd)
+    if not transcripts_dir.exists():
+        return buckets
+    parsed_windows = [(label, _parse_iso(start), _parse_iso(end)) for label, start, end in windows]
+    for jsonl_file in transcripts_dir.glob("*.jsonl"):
+        try:
+            lines = jsonl_file.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if entry.get("type") != "assistant":
+                continue
+            message = entry.get("message") or {}
+            usage = message.get("usage")
+            ts = entry.get("timestamp")
+            if not usage or not ts:
+                continue
+            turn_ts = _parse_iso(ts)
+            for label, start, end in parsed_windows:
+                if start <= turn_ts <= end:
+                    bucket = buckets[label]
+                    for field in USAGE_FIELDS:
+                        bucket[field] += usage.get(field, 0) or 0
+                    bucket["calls"] += 1
+                    call_cost = calc_cost(message.get("model"), usage) if message.get("model") else None
+                    if call_cost is None:
+                        bucket["unpriced_calls"] += 1
+                    else:
+                        bucket["cost"] += call_cost
+                    break
+    return buckets
+
+
+def build_task_report(cwd: str, projects_root: Path, slug: str) -> str:
+    """Markdown usage table for a task, for inclusion in its PR/MR body (Publish Mode)."""
+    task_dirs = sorted(Path(cwd).glob(f"docs/.tasks/*-{slug}"))
+    if not task_dirs:
+        return f"Usage: unavailable (no task folder found for slug '{slug}')"
+    entries = parse_history_md(task_dirs[-1] / "HISTORY.md")
+    if not entries:
+        return "Usage: unavailable (predates timestamp tracking)"
+
+    windows = phase_windows(entries)
+    stats = usage_by_windows(cwd, projects_root, windows)
+
+    total = _empty_usage() | {"cost": 0.0, "unpriced_calls": 0}
+    rows = []
+    for label, _, _ in windows:
+        row = stats[label]
+        tokens = sum(row[f] for f in USAGE_FIELDS)
+        rows.append(f"| {label} | {tokens:,} | ${row['cost']:.2f} |")
+        for field in (*USAGE_FIELDS, "calls"):
+            total[field] += row[field]
+        total["cost"] += row["cost"]
+        total["unpriced_calls"] += row["unpriced_calls"]
+
+    total_tokens = sum(total[f] for f in USAGE_FIELDS)
+    lines = [
+        "| Phase | Tokens | Cost |",
+        "|---|---|---|",
+        *rows,
+        f"| **Total** | **{total_tokens:,}** | **${total['cost']:.2f}** |",
+        "",
+        "_Approximate: time-window estimate correlated from session transcripts by "
+        "timestamp, not an exact per-task measurement. PLAN's window is backdated "
+        f"{PLAN_WINDOW_LOOKBACK_SECONDS // 60} minutes since no earlier boundary exists._",
+    ]
+    if total["unpriced_calls"]:
+        lines.insert(-1, f"_{total['unpriced_calls']} call(s) used a model with no pricing entry — excluded from cost._")
+    return "\n".join(lines)
 
 
 def encode_project_dir(cwd: str) -> str:
@@ -745,9 +880,19 @@ def find_free_port(start_port: int) -> int:
 
 
 def main():
+    projects_root = Path.home() / ".claude" / "projects"
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--task-report":
+        if len(sys.argv) < 3:
+            print("usage: usage_dashboard.py --task-report <slug> [cwd]", file=sys.stderr)
+            sys.exit(1)
+        slug = sys.argv[2]
+        cwd = sys.argv[3] if len(sys.argv) > 3 else str(Path.cwd())
+        print(build_task_report(cwd, projects_root, slug))
+        return
+
     cwd = sys.argv[1] if len(sys.argv) > 1 else str(Path.cwd())
     port = find_free_port(DEFAULT_PORT)
-    projects_root = Path.home() / ".claude" / "projects"
 
     handler = make_handler(cwd, projects_root)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)

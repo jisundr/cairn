@@ -117,7 +117,7 @@ Update `STATE.md`:
 
 Either way, any `HARNESS FLAG:` note from Step 7 goes into `STATE.md`'s **`Harness flags`** field, not `Key info` — **appended** to whatever is already there, never overwriting `qa-engineer`'s or `software-engineer`'s earlier entries (replace a lone `none` placeholder; otherwise add a new line under the existing ones). `Key info` is rewritten every phase, so a flag parked there would be lost before Publish; `Harness flags` is the field `task-orchestrator` Publish Mode Step 3 actually reads for its consolidated drift question, and it accumulates across the whole chain.
 
-Append one summarized line to `HISTORY.md` either way.
+Append one summarized line to `HISTORY.md` either way — format `<ISO-8601 UTC> — <PHASE> — <note>` (`coding-chain-shared`'s `HISTORY.md line format` convention), the timestamp lets `usage_dashboard.py --task-report` correlate usage to this phase.
 
 ---
 

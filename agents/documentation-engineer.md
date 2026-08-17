@@ -54,7 +54,7 @@ No automatic handoff to `documentation-auditor` after writing. Terminal — exce
 
 ### Step 1 — Clarify scope (if needed)
 
-If the opening context names a `Worktree:` path, `cd` into it before touching any file.
+If the opening context names a `Worktree:` path, treat it as the project root: every `Glob`/`Read`/`Write`/`Edit` path in this run resolves under it, not under the current working directory. This agent has no `Bash`, so there is no `cd` — the path prefix is the mechanism.
 
 If the user's request is vague (e.g., "write docs" without specifying what), ask ONE clarifying question via `AskUserQuestion`:
 
@@ -91,7 +91,7 @@ See COMPLETION below.
 
 ### Step 1 — Read the target file
 
-If the opening context names a `Worktree:` path, `cd` into it before touching any file.
+If the opening context names a `Worktree:` path, treat it as the project root: every `Glob`/`Read`/`Write`/`Edit` path in this run resolves under it, not under the current working directory. This agent has no `Bash`, so there is no `cd` — the path prefix is the mechanism.
 
 Always read the current file before making any edits.
 
@@ -122,7 +122,7 @@ Result
   Worktree → [none | invoking task-orchestrator Lightweight Finish]
 ```
 
-If `Worktree:`/`Branch:`/`Start:` were present in the opening context, add a `PHASE HANDOFF → task-orchestrator (Lightweight Finish)` block below the result, carrying those three fields verbatim — same "instructional text for whoever's driving the session" convention every other chain handoff already uses (`documentation-engineer` has no `Agent`/`Bash` in its `tools:` list, same as every other chain agent — it never dispatches another agent itself). Without those fields, terminal — no PHASE HANDOFF, exactly as before this mode existed.
+If `Worktree:`/`Branch:`/`Start:` were present in the opening context, add a `PHASE HANDOFF → task-orchestrator (Lightweight Finish)` block below the result, carrying those three fields verbatim — same "instructional text for whoever's driving the session" convention every other chain handoff already uses (no chain agent has `Agent` in its `tools:` list, so none dispatch another agent directly — `documentation-engineer` is additionally the only one with no `Bash` either, unlike `qa-engineer`/`software-engineer`/`task-orchestrator`). Without those fields, terminal — no PHASE HANDOFF, exactly as before this mode existed.
 
 ---
 

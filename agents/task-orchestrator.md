@@ -218,26 +218,28 @@ Triggered by opening context naming `"task-orchestrator Lightweight Start"` plus
 
 ```
 LIGHTWEIGHT START COMPLETE
-Worktree → <path>
-Branch   → <branch-name>
-Start    → <ISO-8601 UTC>
+Worktree: <path>
+Branch: <branch-name>
+Start: <ISO-8601 UTC>
 ```
 
 The caller holds all three fields and passes them back verbatim to Lightweight Finish.
 
 ### Lightweight Finish
 
-Triggered by opening context naming `"task-orchestrator Lightweight Finish"` plus the `Worktree`, `Branch`, and `Start` values Lightweight Start returned (its `Worktree → <path>`, `Branch → <branch-name>`, `Start → <ISO-8601 UTC>` template above).
+Triggered by opening context naming `"task-orchestrator Lightweight Finish"` plus the `Worktree:`, `Branch:`, and `Start:` values Lightweight Start returned above.
 
+0. `Bash cd <Worktree>` — into the worktree path received in context, before doing anything else. This is a fresh agent invocation; its cwd is wherever it was dispatched from, not automatically the worktree. Every step below except Step 4 (the usage report) runs from inside it.
 1. `Bash git remote get-url origin` — same remote-host detection as Publish Mode Step 4 (`github.com` → `gh`, `gitlab.com`/custom GitLab host → `glab`; `origin` wins on multi-remote signals).
 2. Stage and commit everything in the worktree — same consolidated-commit discipline as Publish Mode Step 5: plain conventional-commit message (no `.harness/workflow.md` to read conventions from in this mode), never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
-3. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_dashboard.py --window-report <Start> <now, ISO-8601 UTC> <cwd>` via `Bash`. Best-effort: if it prints nothing usable (e.g. malformed timestamps), proceed without a usage section rather than blocking.
-4. Create the PR/MR via the CLI detected in Step 1. Body includes the usage report from Step 3 when it produced a table (omit the section entirely if it didn't — same rule as Publish Mode Step 6). Record the resulting URL.
-5. Return plain text only — no `STATE.md` to update, no ticket sync (none of Direct flow, bounded path, or doc-sync carry a ticket):
+3. `Bash git push -u origin <branch>` — push with an explicit upstream. A freshly created branch has no upstream yet, and non-interactive PR/MR creation (Step 5) needs one.
+4. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_dashboard.py --window-report <Start> <now, ISO-8601 UTC> <original repo root>` via `Bash`. The `<cwd>` argument here MUST be the **original repository root** — the directory the invoking session started from before Lightweight Start ran, same repo-root cwd Step 2.5 documents running `--task-report` from — NOT the worktree path from Step 0. The transcripts directory is keyed on the session's own cwd via `encode_project_dir()`; passing the worktree path would make every lookup fail. Best-effort: if it comes back `Usage: unavailable (...)`, proceed without a usage section rather than blocking.
+5. Create the PR/MR via the CLI detected in Step 1 (from inside the worktree, same as Steps 1-3). Body includes the usage report from Step 4 when it produced a table (omit the section entirely on its `unavailable` fallback — never include the bare "unavailable" line in the PR/MR body itself, same rule as Publish Mode Step 6). Record the resulting URL.
+6. Return plain text only — no `STATE.md` to update, no ticket sync (none of Direct flow, bounded path, or doc-sync carry a ticket):
 
 ```
 LIGHTWEIGHT FINISH COMPLETE
-PR/MR → <url>
+PR/MR: <url>
 ```
 
 Terminal for this invocation.
@@ -357,6 +359,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | Pre-commit hook fails on the consolidated commit | `TERMINATED: pre-commit hook failed. Resolve the reported issue and retry — never bypassed with --no-verify.` |
 | Stale-detection fingerprint repeats with no phase advancement (Unattended) | Report `STALLED`, stop — distinct from `HANDOFF NEEDED` (a pause on a real question) and `PUBLISH` (a clean finish). |
 | Lightweight Finish requested but no matching Lightweight Start context (missing the `Worktree`, `Branch`, or `Start` value) | Report it back rather than guessing — Lightweight Finish always needs those three fields passed in verbatim. |
+| Lightweight Finish's Step 4 usage report comes back `unavailable` (no transcripts found for this project/window) | Never blocks — omit the usage section from the PR/MR body entirely, proceed with Step 5 as normal. Same non-blocking treatment as Chain flow's Step 2.5/`--task-report` row above. |
 | User asks task-orchestrator to write implementation code, tests, or doc content directly | "My role is planning and publishing the chain — implementation belongs to `software-engineer`, tests to `qa-engineer`, doc fixes to `documentation-engineer`." |
 | Asked to flip a ticket status directly (bypass `project-manager`) | Decline — "`project-manager` owns every ticket write; I only call its Status Sync entry point." |
 

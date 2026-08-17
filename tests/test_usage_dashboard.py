@@ -468,7 +468,7 @@ def test_build_window_report_renders_single_row(tmp_path):
     _write_session(transcripts_dir, "session-a", [
         _assistant_line("2026-08-17T14:10:00Z", "claude-sonnet-5", input_tokens=1_000_000, output_tokens=0,
                          cache_creation_input_tokens=0, cache_read_input_tokens=0),
-        _assistant_line("2026-08-17T15:30:00Z", "claude-sonnet-5", input_tokens=0, output_tokens=0,
+        _assistant_line("2026-08-17T15:30:00Z", "claude-sonnet-5", input_tokens=5_000_000, output_tokens=0,
                          cache_creation_input_tokens=0, cache_read_input_tokens=0),  # outside window
     ])
 
@@ -477,13 +477,15 @@ def test_build_window_report_renders_single_row(tmp_path):
     assert "Work" in report
     assert "Total" in report
     assert "approximate" not in report.lower()  # single explicit window, not the phase-table's backdated-PLAN caveat
+    assert "1,000,000" in report  # in-window turn's tokens only
+    assert "6,000,000" not in report  # would only appear if the out-of-window turn were also included
 
 
-def test_build_window_report_no_transcripts_reports_zero(tmp_path):
+def test_build_window_report_no_transcripts_reports_unavailable(tmp_path):
     cwd = tmp_path / "myproject"
     cwd.mkdir()
     projects_root = tmp_path / "claude_projects"
 
     report = usage_dashboard.build_window_report(str(cwd), projects_root, "2026-08-17T14:00:00Z", "2026-08-17T15:00:00Z")
 
-    assert "0" in report
+    assert report == "Usage: unavailable (no transcripts found for this project/window)"

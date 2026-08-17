@@ -225,9 +225,12 @@ def build_task_report(cwd: str, projects_root: Path, slug: str) -> str:
 def build_window_report(cwd: str, projects_root: Path, start_iso: str, end_iso: str) -> str:
     """Markdown usage table for a single time window — Lightweight mode's variant of
     build_task_report, for paths with no HISTORY.md/task folder to read phases from."""
+    transcripts_dir = projects_root / encode_project_dir(cwd)
     windows = [("Work", start_iso, end_iso)]
     stats = usage_by_windows(cwd, projects_root, windows)
     row = stats["Work"]
+    if not transcripts_dir.exists() or row["calls"] == 0:
+        return "Usage: unavailable (no transcripts found for this project/window)"
     tokens = sum(row[f] for f in USAGE_FIELDS)
 
     lines = [

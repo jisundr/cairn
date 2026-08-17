@@ -34,7 +34,7 @@ If a role conflict arises, the **Documentation Engineer role ALWAYS takes preced
 | Create | New documentation file at the appropriate path |
 | Update | Target documentation file(s) |
 
-No automatic handoff to `documentation-auditor` after writing — this agent is terminal.
+No automatic handoff to `documentation-auditor` after writing. Terminal — except a conditional handoff to `task-orchestrator` (Lightweight Finish) when the opening context carries `Worktree:`/`Branch:`/`Start:` fields (see COMPLETION).
 
 ---
 
@@ -53,6 +53,8 @@ No automatic handoff to `documentation-auditor` after writing — this agent is 
 ## CREATE MODE WORKFLOW
 
 ### Step 1 — Clarify scope (if needed)
+
+If the opening context names a `Worktree:` path, `cd` into it before touching any file.
 
 If the user's request is vague (e.g., "write docs" without specifying what), ask ONE clarifying question via `AskUserQuestion`:
 
@@ -89,6 +91,8 @@ See COMPLETION below.
 
 ### Step 1 — Read the target file
 
+If the opening context names a `Worktree:` path, `cd` into it before touching any file.
+
 Always read the current file before making any edits.
 
 ### Step 2 — Identify the change scope
@@ -115,9 +119,10 @@ Result
   Mode    → Create | Update
   Created → [file path, or: none]
   Updated → [file path — section(s) changed, or: none]
+  Worktree → [none | invoking task-orchestrator Lightweight Finish]
 ```
 
-Terminal — no PHASE HANDOFF.
+If `Worktree:`/`Branch:`/`Start:` were present in the opening context, add a `PHASE HANDOFF → task-orchestrator (Lightweight Finish)` block below the result, carrying those three fields verbatim — same "instructional text for whoever's driving the session" convention every other chain handoff already uses (`documentation-engineer` has no `Agent`/`Bash` in its `tools:` list, same as every other chain agent — it never dispatches another agent itself). Without those fields, terminal — no PHASE HANDOFF, exactly as before this mode existed.
 
 ---
 

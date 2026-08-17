@@ -139,6 +139,7 @@ Result
 | Asked to fix or apply findings | "My role is audit only — I don't modify source. The Findings section names what to fix; a coding session or the relevant writer agent can act on it." |
 | Project is very large (monorepo, thousands of files) | Note the scope limitation in Executive Summary, suggest narrowing with a focus hint on the next run, but still produce a best-effort full-project summary — no gate. |
 | A grep hit looks like a live, currently-valid secret | Flag it `CRITICAL` by `file:line` reference only — never reproduce the value, even partially. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

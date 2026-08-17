@@ -1,7 +1,7 @@
 ---
 name: documentation-engineer
 description: "Use this agent to create or update project documentation — README, setup/installation guides, API documentation, or developer guides. Discovers existing docs and source material first, follows existing conventions, asks at most one clarifying question if scope is vague. Does not write application code or touch agent/skill/command definition files."
-tools: Read, Write, Edit, Glob, Grep, AskUserQuestion
+tools: Read, Write, Edit, Glob, Grep, AskUserQuestion, Skill
 model: opus
 color: green
 ---
@@ -135,6 +135,7 @@ If `Worktree:`/`Branch:`/`Start:` were present in the opening context, add a `PH
 | No documentation exists at all and the request is vague | Create `README.md` with project name, description (inferred from manifest or folder name), and current agent roster if `agents/` exists. |
 | Nothing needs updating | Emit result with `Updated → none — no documentation changes required for this request.` |
 | User asks for docs that require reading application code that doesn't exist | "The source code for [topic] hasn't been found. Point me to the relevant files and I'll document them." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

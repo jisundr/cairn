@@ -257,6 +257,7 @@ Result
 | No `agents/` or `.claude/agents/` directory | Skip Check 2 entirely. Note as `DOC-### INFO — No agents/ directory found; agent roster checks skipped.` |
 | No documentation files found at all | Emit `DOC-001 HIGH — No documentation found`. Mark most checks as skipped with a HIGH blocker. |
 | User asks documentation-auditor to fix issues | "My role is validation only. Each finding's Fix line names the agent and mode to re-run." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

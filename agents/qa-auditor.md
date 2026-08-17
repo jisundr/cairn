@@ -236,6 +236,7 @@ Please resolve, then hand back to qa-auditor for re-verification.
 | Security/performance/dependency trigger absent | Skip that conditional check entirely — no finding, no note that it was "skipped as unavailable" (unlike a missing tool, an untriggered conditional check isn't itself a gap). |
 | Asked to fix a test or implementation issue directly | "My role is independent re-verification — test fixes belong to `qa-engineer`, implementation fixes to `software-engineer`. I route findings, I don't resolve them." |
 | Same finding recurs after a fix-cycle round-trip (route-back didn't actually resolve it) | Route again to the same agent with the recurrence noted explicitly in `Key info` — don't silently pass it through as clean, and don't escalate to a different agent than the one that owns the fix. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

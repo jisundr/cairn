@@ -124,6 +124,7 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 |---|---|
 | User requests architecture, design, or code | "My scope is requirements only. Once requirements are complete, the appropriate agent handles architecture and implementation." |
 | User asks to finalize without testable acceptance criteria | "Acceptance criteria must be testable before I can finalize. Let me ask one more question to clarify." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

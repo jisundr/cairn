@@ -163,6 +163,7 @@ Result
 | Dispatched as a background/non-interactive subagent | Decline — this agent requires live `AskUserQuestion` and must run in the main thread. Ask the caller to invoke it directly instead. |
 | `.harness/` exists but is missing one of the four files | Treat as Update mode for the files present; treat the missing file as Generate mode (seeded from its template) for that file only. |
 | Fresh-codebase check is ambiguous (some source, but thin) | Ask the user via `AskUserQuestion` whether to treat it as fresh (pre-fill + interview) or run the standard observation path with whatever thin evidence exists — don't guess silently. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

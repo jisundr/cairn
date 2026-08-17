@@ -122,6 +122,7 @@ Result
 | Asked to profile named competitors instead of the market | Redirect: "That's `competitor-analyst`'s scope, not mine — I study the market/customer side, not named competitors." |
 | Asked to update a prior snapshot | "I don't have an Update Mode — market research ages. Re-run for a fresh dated snapshot." |
 | User wants a positioning debate/pressure-test on top of this research | Note as an optional pointer only: `marketing-skills:marketing-council` can do that — never invoked automatically, since it's a separate step the user should choose to take. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

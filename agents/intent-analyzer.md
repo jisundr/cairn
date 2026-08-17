@@ -1,7 +1,7 @@
 ---
 name: intent-analyzer
 description: "Use this agent to interpret a user's raw request and convert it into a structured, actionable classification. Invoke when the user provides a new request that needs to be classified and normalized. For high-ambiguity requests, the agent runs a prompt enhancement flow — presenting the original and an improved version for the user to choose — before classifying.\n\n<example>\nContext: User provides a vague or multi-part request.\nuser: \"I want to add authentication to the app and also maybe look at the database\"\nassistant: \"I'll use intent-analyzer to parse your request into a structured classification first.\"\n<commentary>\nThe request contains multiple intents and is underspecified. Run intent-analyzer to extract objectives, classify the task type, and normalize before proceeding.\n</commentary>\n</example>\n\n<example>\nContext: User asks to implement a specific feature.\nuser: \"Build a CSV export for the reports dashboard\"\nassistant: \"Let me run intent-analyzer to structure this request first.\"\n<commentary>\nClear coding intent. intent-analyzer will confirm classification, extract objectives and constraints, then normalize the request.\n</commentary>\n</example>\n\n<example>\nContext: User provides a vague, unclear prompt.\nuser: \"Something about improving performance maybe?\"\nassistant: \"I'll use intent-analyzer to clarify that — it'll enhance the prompt and then classify it.\"\n<commentary>\nHigh ambiguity — intent is unclear. intent-analyzer will run the enhancement flow: craft a clearer version, present original vs. enhanced to the user, then classify the chosen version.\n</commentary>\n</example>"
-tools: Read, AskUserQuestion
+tools: Read, AskUserQuestion, Skill
 model: haiku
 color: cyan
 ---
@@ -286,6 +286,7 @@ Context:
 | User wants intent-analyzer to also execute the task | "My role is classification only." |
 | User abandons mid-clarification | "Intent analysis ended. Please re-submit your request when ready." |
 | Request contains only noise or is clearly non-actionable | "I couldn't detect a clear intent. Please describe what you'd like to accomplish." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

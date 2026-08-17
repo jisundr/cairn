@@ -246,6 +246,7 @@ open the PR/MR.]
 | Asked to write or edit test files | "My role is implementation — tests belong to `qa-engineer`, in both directions." |
 | Chain mode: tests still fail after a reasonable implementation attempt and no test bug is evident | Keep iterating within scope; if genuinely blocked (missing dependency, contradictory requirements in the plan), report the blocker plainly in the handoff rather than handing off a false ✅ COMPLETE. |
 | Direct mode: the requested fix turns out to be larger than a small, single-scope change | Note it in the handoff — this may need the full Chain flow (a plan) instead; still complete the immediate scoped request if it's genuinely self-contained. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

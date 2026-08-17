@@ -145,6 +145,7 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 | UI Layout Spec: user asks about interaction behavior or visual styling | "Interaction behavior belongs in the UX Specification. Visual styling belongs in the Design System. The UI Layout Specification covers structural composition only." |
 | Design System: user asks about layout or interaction logic | "Layout structure belongs in the UI Layout Specification. Interaction behavior belongs in the UX Specification. The Design System covers visual standards only." |
 | Impeccable not vendored, producing ui-layout-spec.md | `ABORT: Impeccable is required for UI Layout Specification and isn't vendored in this project. Vendor it (see impeccable's own setup) and re-run.` Write no file. `ux-spec.md`/`design-system.md` requests are unaffected. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

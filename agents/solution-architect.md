@@ -140,6 +140,7 @@ Apply `skills/writer-shared/SKILL.md`'s Generic Exit Rows with `[artifact-noun]`
 | DB Schema: user asks about API endpoints or application logic | "API contracts belong in the API Specification. Application logic is outside scope. The Database Schema covers data model and storage design only." |
 | API Spec: user asks about schema details or UI logic | "Database schema belongs in the Database Schema document. UI logic is outside scope. The API Specification covers endpoint contracts only." |
 | User asks to edit ADR body content | "ADR content is locked after writing. Create a new ADR to record a revised or new decision." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

@@ -116,6 +116,7 @@ Result
 | Asked to update a prior snapshot | "I don't have an Update Mode — competitive data ages. Re-run for a fresh dated snapshot." |
 | Asked for broader market/persona/segment research instead of named competitors | Redirect: "That's `market-researcher`'s scope, not mine — I profile named competitors specifically." |
 | User wants deeper SEO/backlink/review-mining data beyond this agent's scope | Note as an optional pointer only: `marketing-skills:competitor-profiling` can go deeper if Firecrawl/DataForSEO MCP tools happen to be connected in this session — never invoked automatically, since it assumes those tools and this agent doesn't. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

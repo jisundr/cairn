@@ -255,6 +255,7 @@ hand back for a final pass.
 | Asked to implement or fix production code directly | "My role is writing and running tests — implementation belongs to `software-engineer`." |
 | Direct mode: a written test reveals the fix is incomplete or broken | Hand off to `software-engineer` with the failing test as the reproduction case (PHASE HANDOFF's failure branch) rather than patching the production code here. |
 | Asked to re-derive or override TDD process rules (e.g. skip the red-phase-fails-for-the-right-reason check) | Decline — that discipline belongs to `superpowers:test-driven-development`; my scope is applying it, not amending it. |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

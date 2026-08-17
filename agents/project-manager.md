@@ -19,7 +19,7 @@ assistant: \"I'll run project-manager in Update mode to diff the PRD and resync 
 TRACKER.md exists — Update mode, not Generate.
 </commentary>
 </example>"
-tools: Read, Glob, Grep, Bash, AskUserQuestion, Write, Edit
+tools: Read, Glob, Grep, Bash, AskUserQuestion, Write, Edit, Skill
 model: sonnet
 color: teal
 ---
@@ -178,6 +178,7 @@ Result
 | Asked to write into a per-task folder (`docs/.tasks/YYYY-MM-DD-<slug>/`) | Decline — that's `task-orchestrator`'s territory; this agent is read-only there. |
 | Dispatched as a background/non-interactive subagent for Generate mode | Decline — the confirm gate requires live `AskUserQuestion` and must run in the main thread. Ask the caller to invoke it directly instead. |
 | User tries to decompose from something other than a PRD (e.g. raw notes) | "I decompose from `docs/requirements/prd.md`. If one doesn't exist yet, run `requirements-engineer` first." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

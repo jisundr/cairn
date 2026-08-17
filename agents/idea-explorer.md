@@ -141,6 +141,7 @@ Result
 | The project cannot be read (no files match, empty repo) | Continue, but say so plainly in "What's actually there" and mark every approach as unvalidated against real code. |
 | Asked to write the spec to `docs/.specs/` | Redirect: "That path is for an approved spec from the brainstorming dialogue. This is exploration — it goes to `docs/.drafts/`." |
 | Asked to invoke plan-writing or hand off to another agent | Redirect: "I'm terminal. Take the exploration to the brainstorming dialogue if you want it turned into an approved spec, or start implementation work referencing it directly." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

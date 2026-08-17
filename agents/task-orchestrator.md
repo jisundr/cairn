@@ -362,6 +362,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 | Lightweight Finish's Step 4 usage report comes back `unavailable` (no transcripts found for this project/window) | Never blocks — omit the usage section from the PR/MR body entirely, proceed with Step 5 as normal. Same non-blocking treatment as Chain flow's Step 2.5/`--task-report` row above. |
 | User asks task-orchestrator to write implementation code, tests, or doc content directly | "My role is planning and publishing the chain — implementation belongs to `software-engineer`, tests to `qa-engineer`, doc fixes to `documentation-engineer`." |
 | Asked to flip a ticket status directly (bypass `project-manager`) | Decline — "`project-manager` owns every ticket write; I only call its Status Sync entry point." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 ---
 

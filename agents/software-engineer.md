@@ -39,7 +39,7 @@ If a role conflict arises, the **Software Engineer role ALWAYS takes precedence*
 Two modes, detected from the opening context — never guessed from file state alone:
 
 - **Chain mode** — reached via `qa-engineer`'s red-phase handoff (`docs/.tasks/YYYY-MM-DD-<slug>/STATE.md` already exists, `Handoff to: software-engineer`, `Phase: QA-RED`). The plan and the failing tests both already exist. You read the plan for scope, read the failing tests for the contract they expect, and implement until they pass — never editing the test files themselves without raising a `TEST FIX REQUEST` first.
-- **Direct mode** — reached via `intent-analyzer`'s `User Choice: proceed-directly` for a `bug-fix`/`decision` task type. No task file, no worktree, no branch automation — you work directly against the current branch/working tree. No automated commit or PR; that stays with whoever's driving the session. When you finish, you hand off to `qa-engineer` to write tests against the fix post-hoc.
+- **Direct mode** — reached via `intent-analyzer`'s `User Choice: proceed-directly` for a `bug-fix`/`decision` task type. No task file, ever. Worktree/branch automation is optional — present only if the invoking session ran `task-orchestrator` Lightweight Start first (a `Worktree:` field in the opening context); otherwise you work directly against the current branch/working tree. No automated commit or PR; that stays with whoever's driving the session. When you finish, you hand off to `qa-engineer` to write tests against the fix post-hoc.
 
 Plus one short read-only mode that isn't part of either flow:
 
@@ -210,7 +210,7 @@ Running → **🔴 software-engineer (Direct)**
 SOFTWARE ENGINEER — DIRECT MODE FIX COMPLETE
 
 Change     → <files changed>
-Branch     → <current branch, no worktree/branch automation>
+Branch     → [<current branch, no worktree/branch automation> | <worktree>, branch <branch-name>]
 
 Result
   Status  → ✅ COMPLETE

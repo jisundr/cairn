@@ -54,7 +54,7 @@ assistant: \"I'll use release-manager with the rc flag — same flow, but the ta
 RC tag requested explicitly. release-manager supports this via an optional argument, carried over from maestro's original agent.
 </commentary>
 </example>"
-tools: Read, Bash, Write, AskUserQuestion
+tools: Read, Glob, Bash, Write, Edit, AskUserQuestion, Skill
 model: sonnet
 color: green
 ---
@@ -99,6 +99,7 @@ EXIT & DERAILMENT table must include at least:
 | No git remote named `origin` | Stop before the Execute step; report that push has no target. |
 | Working tree has uncommitted changes unrelated to the release (`git status` not clean before Step 5) | Report the dirty state and ask whether to proceed (release commit only) or the user wants to handle those changes first. |
 | User declines the proposed plan | "No release cut. Nothing was written." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 - [ ] **Step 6: Validate**
 
@@ -112,9 +113,11 @@ mkdir -p /tmp/cairn-release-test && cd /tmp/cairn-release-test && git init -q
 git commit --allow-empty -q -m "chore: initial commit"
 mkdir -p .claude-plugin && printf '{"name":"test-plugin","version":"0.1.0"}' > .claude-plugin/plugin.json
 git add .claude-plugin && git commit -q -m "feat: add plugin manifest"
-claude -p "cut a release for this" --plugin-dir /Users/jaysondelosreyes/cairn --permission-mode bypassPermissions --output-format text
+claude -p "/cairn:cairn-release" --plugin-dir /Users/jaysondelosreyes/cairn --permission-mode bypassPermissions --output-format text
 ```
 Expected: agent detects no tags exist yet, diffs from the first commit, proposes a version bump (likely `0.2.0` given the `feat:` commit) with a `CHANGELOG.md` draft and tag name, and asks for confirmation. Since this is a non-interactive headless run, the `AskUserQuestion` will surface as a stop point — inspect the reported plan text to confirm it's well-formed (version, reasoning, changelog entry, tag name all present and consistent) rather than expecting it to complete the push unattended.
+
+Note: this exercises the `/cairn-release` command path only (matching `CLAUDE.md`'s own documented end-to-end command-testing shape), not the natural-language "cut a release" recognition — that mapping lives in *this* repo's `CLAUDE.md`, which a scratch dir doesn't have. The natural-language trigger is verified manually in this repo instead; this is the plan's only automated smoke test, so `qa-engineer` should treat it as covering Detect→Harness Check→Gather Evidence→Propose only, not Execute (tag-collision, version-match validation, actual tag/push, the `rc` path, `.harness/` override) — consider additional scratch-repo smoke runs at red phase for Execute-step coverage.
 
 - [ ] **Step 8: Commit**
 
@@ -145,6 +148,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```markdown
 ---
 description: "Cut a cairn release: propose a semver bump + changelog from git history since the last tag, confirm once, then commit, tag, and push. Pass 'rc' as an argument to cut a release candidate instead of a final release."
+argument-hint: "[rc]"
 ---
 
 ## Your task
@@ -192,6 +196,14 @@ Insert directly after the `/cairn-doctor` paragraph, matching that paragraph's s
 
 ```markdown
 **`/cairn-release [rc]`** — dispatches `release-manager` to cut a release (or, with the `rc` argument, a release candidate). See `release-manager` above for the full flow.
+```
+
+- [ ] **Step 2.5: Reconcile `## Versioning` with `release-manager`'s bump ownership**
+
+`CLAUDE.md`'s existing `## Versioning` section instructs a manual per-change bump ("Bump `version`... whenever a change is something a consuming project needs to see reflected") — every plan in this repo (including this one's own Task 5) follows that rule literally. `release-manager` computes and writes that same field independently at release time, from git history since the last tag — two owners, two timings, with no stated reconciliation. Append one sentence to the end of `## Versioning`:
+
+```markdown
+`release-manager` (see above) does not replace this rule — it reads whatever `version` is currently committed (the accumulated result of every manual per-change bump since the last tag) and proposes the release tag from that, never overriding a bump you've already made by hand.
 ```
 
 - [ ] **Step 3: Validate**
@@ -252,7 +264,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Bump version**
 
-This is a new feature (new agent + new command) — minor bump per this repo's own Versioning rule. Read current `version` in `.claude-plugin/plugin.json`, bump the minor component, reset patch to 0.
+This is a new feature (new agent + new command) — minor bump per this repo's own Versioning rule. Before bumping, check `git show main:.claude-plugin/plugin.json` for the current version on `main` (not just the worktree's own copy) — two sibling chain runs (`goal-file-plan-writing`, `pr-reviewer`) are also live against this same repo and independently bump the same field; whichever of the three merges first sets the real baseline, the other two will need a rebase-and-recompute at merge time (`task-orchestrator` Publish Mode's normal conflict-resolution territory, not something to pre-solve here). Bump the minor component from whichever value is actually current when this step runs, reset patch to 0.
 
 - [ ] **Step 2: Final validation**
 

@@ -8,5 +8,5 @@ Plan: docs/.plans/2026-08-18-goal-file-plan-writing.md
 Ticket: none
 Worktree: /Users/jaysondelosreyes/cairn/.worktrees/feature-goal-file-plan-writing
 Branch: feature/goal-file-plan-writing
-Key info: PUBLISH (task-orchestrator): PR/MR URL → PENDING (filled in immediately after `gh pr create` in this same Publish run). UAT checklist → docs/.tasks/2026-08-18-goal-file-plan-writing/UAT.md.
+Key info: PUBLISH (task-orchestrator): PR/MR URL → https://github.com/jisundr/cairn/pull/2. UAT checklist → docs/.tasks/2026-08-18-goal-file-plan-writing/UAT.md.
 Harness flags: qa-engineer — no repo convention exists for verifying markdown-only skill-definition changes (SKILL.md/CLAUDE.md prose edits with no unit-testable code): verification today relies entirely on `claude plugin validate . --strict` plus an ad-hoc manual headless smoke test authored per-plan. Worth a `.harness/standards.md` `## Testing` entry once harness-engineer runs, so future plans in this repeated shape (skill-wrapper edits) get a consistent verification recipe instead of reinventing one each time.

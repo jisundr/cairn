@@ -21,6 +21,8 @@
 - Findings are reported, never auto-fixed.
 - Host detection: `github.com` → `gh`, `gitlab.com`/custom GitLab host → `glab` (same convention as `task-orchestrator`).
 - `agents/intent-analyzer.md` itself is never modified by this work.
+- `code-review` and `/loop` are core Claude Code capabilities, not third-party plugins — no hard-required/soft-optional install-check applies to either (unlike `idea-explorer`'s `superpowers` dependency or Graphify). An actual failure to resolve either is an EXIT & DERAILMENT case, not a startup capability check.
+- `Skill(skill: "code-review", ...)` must resolve Claude Code's built-in code-review capability, never the unrelated community marketplace plugin of the same name — see EXIT & DERAILMENT.
 
 ---
 
@@ -38,7 +40,7 @@
 ```yaml
 ---
 name: pr-reviewer
-description: "Use this agent to review a GitHub pull request or GitLab merge request end-to-end: resolve the target, generate findings, draft them, and post as comments only after explicit confirmation. Input is a PR/MR URL, or a branch name (+ repo if not inferrable from local origin). GitHub targets delegate finding-generation to the built-in code-review skill (which already reviews and can post to GitHub PRs); GitLab targets are reviewed directly against the fetched diff, mirroring code-review's own categories (correctness, reuse/simplification/efficiency) and effort levels, since no GitLab-aware skill exists to delegate to. Re-invocable on an already-reviewed target as a Fix-Verification Round (checks whether previously-reported findings were fixed, drafts dated follow-up replies) without re-running the review. Also supports an explicit, opt-in Thread Watch mode (driven by the built-in /loop skill, one pass per tick) that monitors a target for new discussion activity until merged/closed, including an Approval-to-Merge Gate that surfaces a merge confirmation once approved — it never merges automatically.
+description: "Use this agent to review a GitHub pull request or GitLab merge request end-to-end: resolve the target, generate findings, draft them, and post as comments only after explicit confirmation. Input is a PR/MR URL, or a branch name (+ repo if not inferrable from local origin). GitHub targets delegate finding-generation to Claude Code's built-in code-review capability (Skill(skill: \"code-review\", ...), no --comment — review-only, no posting; a separate, unrelated community marketplace plugin also happens to be named code-review, this agent must resolve the built-in one, never that plugin); GitLab targets are reviewed directly against the fetched diff, mirroring code-review's own categories (correctness, reuse/simplification/efficiency) and effort levels, since no GitLab-aware skill exists to delegate to. Re-invocable on an already-reviewed target as a Fix-Verification Round (checks whether previously-reported findings were fixed, drafts dated follow-up replies) without re-running the review. Also supports an explicit, opt-in Thread Watch mode (driven by the built-in /loop skill, one pass per tick) that monitors a target for new discussion activity until merged/closed, including an Approval-to-Merge Gate that surfaces a merge confirmation once approved — it never merges automatically.
 
 <example>
 Context: User wants a GitHub PR reviewed and findings posted as comments.
@@ -292,6 +294,8 @@ Table must include at least (adapted host-neutral from maestro's original):
 | Thread Watch requested without a clear Watch Origin and it can't be inferred | Ask ONE question: "Is this part of an in-progress coding-chain task, or a standalone review? (Determines whether a merge triggers follow-through.)" |
 | User asks Thread Watch to also flip tracker Status on merge | "Thread Watch never writes tracker Status — `task-orchestrator`/`project-manager` own that." |
 | User asks to run Thread Watch as a background/dispatched subagent | "Thread Watch needs `AskUserQuestion` for its posting and merge gates, which isn't available in a dispatched background subagent — it has to run in the main thread via `/loop`." |
+| `Skill(skill: "code-review", ...)` resolves to something that doesn't match the built-in capability's expected shape (e.g. no effort-level/`--comment` support, or it posts unconditionally with no way to get findings back without posting) | Stop before drafting. Report: "The `code-review` skill that resolved doesn't match what this agent expects — this environment may have a different `code-review` (a community marketplace plugin shares the name) instead of Claude Code's built-in one. Findings can't be safely drafted without confirming which one is in play." |
+| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 - [ ] **Step 4: Write START**
 
@@ -306,6 +310,7 @@ Expected: passes clean, no leftover `<TODO placeholder>` markers anywhere in the
 
 ```bash
 CAIRN_ROOT="$(pwd)"   # run this from inside the repo/worktree where agents/pr-reviewer.md was just written — NOT a hardcoded path, this plan may run from a worktree
+rm -rf /tmp/cairn-pr-reviewer-test   # re-run-safe: fresh scratch dir every time, avoids "remote origin already exists" / accumulating commits on a retry
 mkdir -p /tmp/cairn-pr-reviewer-test && cd /tmp/cairn-pr-reviewer-test && git init -q
 git commit --allow-empty -q -m "chore: initial commit"
 git remote add origin https://github.com/octocat/Hello-World.git

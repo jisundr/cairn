@@ -8,9 +8,10 @@ cairn is a Claude Code **plugin** (not a project-installed framework) — a pers
 
 ## Commands
 
-- `pytest tests/ -v -s` — run everything. `-s` shows the eval suite's per-case pass/fail summary.
+- `pytest tests/ -v -s` — run the pytest suite (unit tests + eval). `-s` shows the eval suite's per-case pass/fail summary. Does not collect `tests/smoke/*.sh` (see Testing below) — run those separately.
 - `pytest tests/test_usage_dashboard.py -v` — the deterministic subset only (pure functions, fast, no external calls, always green — a failure here is a real regression).
 - `pytest tests/test_intent_routing.py -v -s` — the eval suite (see Testing below). Slow (~1–2 min, runs cases in parallel), requires `claude` on `PATH` with real auth, and asserts an aggregate pass rate rather than gating on any single case.
+- `bash tests/smoke/<script>.sh [plugin-dir]` — a headless smoke test (see Testing below); run individually, not via pytest.
 - `claude plugin validate . --strict` — validates the plugin manifest; same check CI (`.github/workflows/validate.yml`) runs on every push.
 
 ### Testing a command end-to-end
@@ -93,10 +94,11 @@ Bump `version` in `.claude-plugin/plugin.json` (semver — minor for new feature
 
 ## Testing
 
-Two distinct kinds of test, don't conflate them:
+Three distinct kinds of test, don't conflate them:
 
 - **`tests/test_usage_dashboard.py`** — ordinary unit tests over pure functions (JSONL parsing/aggregation, using `tmp_path` fixtures). Deterministic, always green.
 - **`tests/test_intent_routing.py`** — an *eval*, not a unit test. Each case is a real classification decision from a live `claude` CLI call (`model: haiku`, matching the shipped agent) on a prompt chosen to sit near a category boundary. A single case flipping between runs is expected model variance, not a regression — the test asserts an aggregate pass rate (`MIN_PASS` in that file) across the whole case set, not per-case. Only treat a case as actually broken if it fails consistently across reruns, or the failure reason itself is new.
+- **`tests/smoke/*.sh`** — headless scratch-repo/fixture tests for markdown agent/command definitions with no unit-testable code, driving `claude -p ... --plugin-dir ... --permission-mode bypassPermissions` against throwaway git repos or fixture task folders. Not pytest-collected — run each script directly (`bash tests/smoke/<script>.sh [plugin-dir]`). Requires `claude` on `PATH` with real auth, and `tmux` for any script exercising Unattended-mode fixtures. Assert against observable output/artifacts (a saved file, a `STATE.md` field, whether a `tmux` session still exists) rather than parsing the outer CLI's paraphrased text where possible — that text varies run to run.
 
 <!-- cairn:start -->
 ## cairn (mandatory entrypoint)

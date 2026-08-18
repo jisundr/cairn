@@ -1,0 +1,10 @@
+Doc Gate done, stopped clean. 3 in-scope HIGH findings block plan, need human call — STATE.md Phase now `HANDOFF NEEDED`, full question written to Key info.
+
+Blockers:
+1. **DOC-001** — Task 1's GitHub path calls `code-review` with `--comment`, which posts inline immediately — contradicts pr-reviewer's own draft/confirm/post hard requirements. Fix: drop `--comment`, let pr-reviewer own posting.
+2. **DOC-002** — spec requires a `review`-category → pr-reviewer routing mapping in CLAUDE.md; Task 6 never writes it.
+3. **DOC-003** — Task 4's smoke test points `--plugin-dir` at main repo, not this worktree — agent won't even exist there, check is vacuous.
+
+Also flagged non-blocking: pre-existing `/cairn-feedback` doc gap, `/loop` misattributed as cairn-owned, plan/release-manager anchor+version collision, unverified `xhigh` effort level, insertion-point placement judgment call.
+
+Say how to resolve the 3 HIGHs (proposed fixes are in STATE.md) and I'll amend plan/spec and resume the chain.

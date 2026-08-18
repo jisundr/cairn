@@ -21,8 +21,6 @@
 - Findings are reported, never auto-fixed.
 - Host detection: `github.com` → `gh`, `gitlab.com`/custom GitLab host → `glab` (same convention as `task-orchestrator`).
 - `agents/intent-analyzer.md` itself is never modified by this work.
-- `code-review` and `/loop` are core Claude Code capabilities, not third-party plugins — no hard-required/soft-optional install-check applies to either (unlike `idea-explorer`'s `superpowers` dependency or Graphify). An actual failure to resolve either is an EXIT & DERAILMENT case, not a startup capability check.
-- `Skill(skill: "code-review", ...)` must resolve Claude Code's built-in code-review capability, never the unrelated community marketplace plugin of the same name — see the EXIT & DERAILMENT table (Task 4 Step 3). No pre-invocation identity check exists; a wrong resolution that posts unconditionally is an accepted residual risk (see that same table), not one this agent can prevent before the first call.
 
 ---
 
@@ -40,7 +38,7 @@
 ```yaml
 ---
 name: pr-reviewer
-description: "Use this agent to review a GitHub pull request or GitLab merge request end-to-end: resolve the target, generate findings, draft them, and post as comments only after explicit confirmation. Input is a PR/MR URL, or a branch name (+ repo if not inferrable from local origin). GitHub targets delegate finding-generation to Claude Code's built-in code-review capability (Skill(skill: \"code-review\", ...), no --comment — review-only, no posting; a separate, unrelated community marketplace plugin also happens to be named code-review, this agent must resolve the built-in one, never that plugin); GitLab targets are reviewed directly against the fetched diff, mirroring code-review's own categories (correctness, reuse/simplification/efficiency) and effort levels, since no GitLab-aware skill exists to delegate to. Re-invocable on an already-reviewed target as a Fix-Verification Round (checks whether previously-reported findings were fixed, drafts dated follow-up replies) without re-running the review. Also supports an explicit, opt-in Thread Watch mode (driven by the built-in /loop skill, one pass per tick) that monitors a target for new discussion activity until merged/closed, including an Approval-to-Merge Gate that surfaces a merge confirmation once approved — it never merges automatically.
+description: "Use this agent to review a GitHub pull request or GitLab merge request end-to-end: resolve the target, generate findings, draft them, and post as comments only after explicit confirmation. Input is a PR/MR URL, or a branch name (+ repo if not inferrable from local origin). GitHub targets delegate finding-generation to the built-in code-review skill (which already reviews and can post to GitHub PRs); GitLab targets are reviewed directly against the fetched diff, mirroring code-review's own categories (correctness, reuse/simplification/efficiency) and effort levels, since no GitLab-aware skill exists to delegate to. Re-invocable on an already-reviewed target as a Fix-Verification Round (checks whether previously-reported findings were fixed, drafts dated follow-up replies) without re-running the review. Also supports an explicit, opt-in Thread Watch mode (driven by the built-in /loop skill, one pass per tick) that monitors a target for new discussion activity until merged/closed, including an Approval-to-Merge Gate that surfaces a merge confirmation once approved — it never merges automatically.
 
 <example>
 Context: User wants a GitHub PR reviewed and findings posted as comments.
@@ -108,7 +106,7 @@ Follow spec "Flow" → "Input Resolution" exactly:
 Follow spec "Flow" → "Initial Review mode" exactly:
 1. Reference Style Lookup — sample existing comments/notes for a matching structure; fall back to a default format (`## Finding N — <summary> _(<category>)_` / **File** / **Line** / snippet / **Suggested fix**) and say so if none found.
 2. Get findings:
-   - GitHub: `Skill(skill: "code-review", args: "<PR number or URL>")` — no `--comment`. Omitting it is deliberate: `--comment` makes `code-review` post inline immediately, bypassing this agent's own draft/confirm/post separation (Global Constraints, first bullet). Findings come back to this agent to draft, save, and post itself, same as the GitLab path.
+   - GitHub: `Skill(skill: "code-review", args: "<PR number or URL> --comment")`.
    - GitLab: review directly against the fetched diff — same categories (correctness + reuse/simplification/efficiency) and effort levels as the GitHub path; no skill to delegate to.
 3. Draft Phase — format findings, iterate freely (cheap, local, no gate), mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` once the user confirms the draft is final.
 4. Confirmation & Posting Phase (Task 4 — write a `<TODO placeholder — see Task 4>` marker comment in this step for now; Task 4 replaces it with the real shared section and removes the marker).
@@ -181,7 +179,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: spec "Flow" → "Thread Watch mode", "Approval-to-Merge Gate", "Merge Termination", "Pushback Triage"; Task 2's Fix-Verification Round logic (Thread Watch reuses it per-tick).
-- Produces: the opt-in watch loop, invoked by Initial Review's post-completion offer (Task 1 Step 5.5) or by `/cairn-watch-pr` (Task 5) — Fix-Verification Round has no post-completion watch offer of its own, only Initial Review does.
+- Produces: the opt-in watch loop, invoked by the Initial Review/Fix-Verification Round post-completion offer (Task 1 Step 5 / Task 2 Step 1.6) or by `/cairn-watch-pr` (Task 5).
 
 - [ ] **Step 1: Write the standalone Pushback Triage section**
 
@@ -196,7 +194,7 @@ Update Task 2's Fix-Verification Round Step 4 to reference this section instead 
 
 Insert `## Thread Watch mode` (spec "Flow" → "Thread Watch mode"):
 - Explicit opt-in only — triggered by the post-completion offer's "Y" answer, or `/cairn-watch-pr`, never auto-started.
-- Runs via the built-in `/loop` skill (not cairn-owned), one pass per tick; this agent never sleeps/polls on its own.
+- Runs via cairn's existing `/loop` skill, one pass per tick; this agent never sleeps/polls on its own.
 - **First entry**: record Watch Origin (`coding-chain` or `review`) and Sibling PR/MRs if any; initialize a Watch Ledger section in the per-target file (Watch Origin, Sibling targets, Seen discussion/comment IDs, Approval State, Merge Prompt Shown For, Last Tick — obtain via `Bash date -u +%Y-%m-%dT%H:%M:%SZ`, never estimated).
 - **Per tick**: refresh Input Resolution including current state (`open`/`merged`/`closed`) and approval status (GitHub: `gh pr view --json reviewDecision,mergeStateStatus`; GitLab: `glab api projects/:id/merge_requests/<iid>/approvals --repo <group/project>`). Terminate per Merge Termination (Step 4 below) on `closed`/`merged`. Otherwise diff comments/discussions against the ledger for (a) new replies to this agent's own findings (reuse Fix-Verification Round's logic unchanged) and (b) new threads opened by anyone else; detect approval-state changes.
 - Notify new threads (author, snippet, link); draft round replies for (a) and either a substantive response or a lightweight FYI/ack note for (b); append to the ledger file, bump Last Tick.
@@ -242,8 +240,8 @@ Expected: passes.
 git add agents/pr-reviewer.md
 git commit -m "Add Thread Watch, Approval-to-Merge Gate, Merge Termination, Pushback Triage to pr-reviewer
 
-Thread Watch stays explicit opt-in, driven by the built-in /loop
-skill (not cairn-owned). Approval-to-Merge Gate never auto-merges and runs one more
+Thread Watch stays explicit opt-in, driven by cairn's existing /loop
+skill. Approval-to-Merge Gate never auto-merges and runs one more
 full-diff pass before an actual merge. GitHub mechanics via gh,
 GitLab mechanics unchanged from maestro's original.
 
@@ -294,9 +292,6 @@ Table must include at least (adapted host-neutral from maestro's original):
 | Thread Watch requested without a clear Watch Origin and it can't be inferred | Ask ONE question: "Is this part of an in-progress coding-chain task, or a standalone review? (Determines whether a merge triggers follow-through.)" |
 | User asks Thread Watch to also flip tracker Status on merge | "Thread Watch never writes tracker Status — `task-orchestrator`/`project-manager` own that." |
 | User asks to run Thread Watch as a background/dispatched subagent | "Thread Watch needs `AskUserQuestion` for its posting and merge gates, which isn't available in a dispatched background subagent — it has to run in the main thread via `/loop`." |
-| `Skill(skill: "code-review", ...)` resolves to something that doesn't match the built-in capability's expected shape (e.g. no effort-level/`--comment` support, or it posts unconditionally with no way to get findings back without posting) | If detected before the call resolves (no effort-level support in the description): stop before drafting, report the mismatch. Accepted residual risk: if a wrong resolution posts unconditionally (an always-posts marketplace plugin sharing the name), that post happens before this agent can detect it — there is no pre-invocation identity check. Report what was posted and by what, and note the target now has an unconfirmed comment from that resolution. |
-| Thread Watch is requested and `/loop` can't be resolved | Report that Thread Watch needs the built-in `/loop` capability and can't run here; offer a single manual Fix-Verification Round instead. Never fall back to self-polling or sleeping. |
-| An error that doesn't match any other row in this table (looks like a cairn-side defect, not this codebase's) | Attempt `Skill(skill: "feedback-context")`; if it succeeds, surface its one-line suggestion alongside the normal error report. Never blocks — falls through to the normal error report either way. |
 
 - [ ] **Step 4: Write START**
 
@@ -310,14 +305,12 @@ Expected: passes clean, no leftover `<TODO placeholder>` markers anywhere in the
 - [ ] **Step 6: Headless smoke test**
 
 ```bash
-CAIRN_ROOT="$(pwd)"   # run this from inside the repo/worktree where agents/pr-reviewer.md was just written — NOT a hardcoded path, this plan may run from a worktree
-rm -rf /tmp/cairn-pr-reviewer-test   # re-run-safe: fresh scratch dir every time, avoids "remote origin already exists" / accumulating commits on a retry
 mkdir -p /tmp/cairn-pr-reviewer-test && cd /tmp/cairn-pr-reviewer-test && git init -q
 git commit --allow-empty -q -m "chore: initial commit"
 git remote add origin https://github.com/octocat/Hello-World.git
-claude -p "review PR #1 on this repo" --plugin-dir "$CAIRN_ROOT" --permission-mode bypassPermissions --output-format text
+claude -p "review PR #1 on this repo" --plugin-dir /Users/jaysondelosreyes/cairn --permission-mode bypassPermissions --output-format text
 ```
-Expected: agent detects `github.com` from `origin`, resolves the `gh` path, runs Input Resolution and Initial Review mode, invoking `Skill(skill: "code-review", ...)`. This is a real public repo/PR so the call should actually resolve — inspect the reported output for **positive evidence** the new `pr-reviewer` agent actually ran (its own draft format, its own mode-detection language, or its own EXIT & DERAILMENT copy — not just "no crash"), since `--plugin-dir` pointing at the wrong tree would silently produce a plausible-looking but unrelated response. A clean "no findings"/auth-required report is fine as long as it's clearly `pr-reviewer`'s own voice, not a generic fallback. Also confirm which `code-review` actually resolved: the built-in one supports effort levels and does not post without `--comment` (this call passes no `--comment`, so **zero new comments should appear on the real PR** — check `gh pr view 1 --repo octocat/Hello-World --json comments` before and after). If a comment appears, the marketplace plugin resolved instead — stop immediately, this is the accepted-residual-risk scenario the EXIT & DERAILMENT table documents, and it means the ambiguity is live in this environment, not just theoretical.
+Expected: agent detects `github.com` from `origin`, resolves the `gh` path, runs Input Resolution and Initial Review mode, invoking `Skill(skill: "code-review", ...)`. This is a real public repo/PR so the call should actually resolve — inspect the reported output for a well-formed draft (or a clean "no findings"/auth-required report if `gh auth status` isn't configured in this environment) rather than a crash or a `<TODO placeholder>` leaking into the output.
 
 - [ ] **Step 7: Commit**
 
@@ -381,15 +374,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 Insert directly after the `release-manager` paragraph added by the release-manager plan (or, if that plan hasn't landed yet in this repo's history, directly after the `qa-auditor` paragraph — before "**End-to-end sequence...**"):
 
 ```markdown
-**`pr-reviewer` (agents/)** — reviews a GitHub PR or GitLab MR end-to-end: resolves the target, generates findings, drafts them, posts as comments only after explicit confirmation. GitHub targets delegate finding-generation to `Skill(skill: "code-review", ...)` — Claude Code's built-in code-review capability, a core CLI feature rather than a hard-required/soft-optional third-party plugin; an unrelated community marketplace plugin happens to share the name, and resolving to it instead is an accepted residual risk with no pre-invocation check (see the agent's EXIT & DERAILMENT table) — directly (cairn agents can hold `Skill`, unlike maestro's subagents — no Mid-Run Skill Handoff relay needed); GitLab targets are reviewed self-implemented, mirroring `code-review`'s categories and effort levels. Re-invocable as a Fix-Verification Round (delta-diff since the last round, dated follow-up replies) without re-running the review. Also supports an explicit opt-in Thread Watch mode (driven by `/loop`, one pass per tick) with an Approval-to-Merge Gate that never auto-merges — every approval-state change gets a fresh confirmation, and a full-diff pass runs once more right before an actual merge. Writes one append-across-rounds `docs/.reviews/<host>-<owner-repo>-<number>.md`. Terminal, except a coding-chain-origin Thread Watch merge detection, which emits a mid-run marker for the main loop (never flips tracker Status itself — `task-orchestrator`/`project-manager` own that). Ported from maestro's GitLab-only `gitlab-mr-reviewer`, generalized to both hosts. Triggered by manual dispatch, `intent-analyzer` `review` category + judgment-call mapping, or `/cairn-watch-pr` for Thread Watch specifically. See `docs/.specs/2026-08-18-pr-reviewer-design.md` for the full design.
-```
-
-- [ ] **Step 1.5: Write the `review` category routing mapping in `CLAUDE.md`**
-
-`intent-analyzer` already emits `review` as a category with no documented destination anywhere in `CLAUDE.md` — every other category that reaches a dispatch (`coding`) has a documented judgment-call mapping (see the "Coding-chain sequence" section); `review` currently has none. Insert a new subsection directly after the "Coding-chain sequence" section (before `/cairn-setup`'s paragraph):
-
-```markdown
-**`review` category routing (documented, not a change to `agents/intent-analyzer.md`):** a `ROUTING DECISION: review` classification whose normalized request targets a specific PR/MR (a URL, PR/MR number, or branch — as opposed to a local diff/branch review with no remote target, which stays the plain `code-review` skill invoked directly) dispatches to `pr-reviewer`. Same "Claude's own documented judgment call" pattern as the coding-chain's Direct/Chain routing above — `agents/intent-analyzer.md` itself is unmodified.
+**`pr-reviewer` (agents/)** — reviews a GitHub PR or GitLab MR end-to-end: resolves the target, generates findings, drafts them, posts as comments only after explicit confirmation. GitHub targets delegate finding-generation to `Skill(skill: "code-review", ...)` directly (cairn agents can hold `Skill`, unlike maestro's subagents — no Mid-Run Skill Handoff relay needed); GitLab targets are reviewed self-implemented, mirroring `code-review`'s categories and effort levels. Re-invocable as a Fix-Verification Round (delta-diff since the last round, dated follow-up replies) without re-running the review. Also supports an explicit opt-in Thread Watch mode (driven by `/loop`, one pass per tick) with an Approval-to-Merge Gate that never auto-merges — every approval-state change gets a fresh confirmation, and a full-diff pass runs once more right before an actual merge. Writes one append-across-rounds `docs/.reviews/<host>-<owner-repo>-<number>.md`. Terminal, except a coding-chain-origin Thread Watch merge detection, which emits a mid-run marker for the main loop (never flips tracker Status itself — `task-orchestrator`/`project-manager` own that). Ported from maestro's GitLab-only `gitlab-mr-reviewer`, generalized to both hosts. Triggered by manual dispatch, `intent-analyzer` `review` category + judgment-call mapping, or `/cairn-watch-pr` for Thread Watch specifically. See `docs/.specs/2026-08-18-pr-reviewer-design.md` for the full design.
 ```
 
 - [ ] **Step 2: Add the `/cairn-watch-pr` command paragraph to `CLAUDE.md`**
@@ -402,7 +387,7 @@ Insert directly after `/cairn-release`'s paragraph (or after `/cairn-doctor` if 
 
 - [ ] **Step 3: Add `pr-reviewer` and `/cairn-watch-pr` bullets to `README.md`**
 
-Same content, condensed to README's existing one-line-per-bullet style, inserted after the `qa-auditor`/`release-manager` Agents bullet and the `/cairn-doctor`/`/cairn-release` Commands bullet respectively. Keep the code-review built-in-vs-marketplace-plugin clause even when condensing — it's the one fact a reader most needs before this agent posts anything on their behalf.
+Same content, condensed to README's existing one-line-per-bullet style, inserted after the `qa-auditor`/`release-manager` Agents bullet and the `/cairn-doctor`/`/cairn-release` Commands bullet respectively.
 
 - [ ] **Step 4: Validate**
 

@@ -106,7 +106,7 @@ Follow spec "Flow" → "Input Resolution" exactly:
 Follow spec "Flow" → "Initial Review mode" exactly:
 1. Reference Style Lookup — sample existing comments/notes for a matching structure; fall back to a default format (`## Finding N — <summary> _(<category>)_` / **File** / **Line** / snippet / **Suggested fix**) and say so if none found.
 2. Get findings:
-   - GitHub: `Skill(skill: "code-review", args: "<PR number or URL> --comment")`.
+   - GitHub: `Skill(skill: "code-review", args: "<PR number or URL>")` — no `--comment`. Omitting it is deliberate: `--comment` makes `code-review` post inline immediately, bypassing this agent's own draft/confirm/post separation (Global Constraints, first bullet). Findings come back to this agent to draft, save, and post itself, same as the GitLab path.
    - GitLab: review directly against the fetched diff — same categories (correctness + reuse/simplification/efficiency) and effort levels as the GitHub path; no skill to delegate to.
 3. Draft Phase — format findings, iterate freely (cheap, local, no gate), mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` once the user confirms the draft is final.
 4. Confirmation & Posting Phase (Task 4 — write a `<TODO placeholder — see Task 4>` marker comment in this step for now; Task 4 replaces it with the real shared section and removes the marker).
@@ -194,7 +194,7 @@ Update Task 2's Fix-Verification Round Step 4 to reference this section instead 
 
 Insert `## Thread Watch mode` (spec "Flow" → "Thread Watch mode"):
 - Explicit opt-in only — triggered by the post-completion offer's "Y" answer, or `/cairn-watch-pr`, never auto-started.
-- Runs via cairn's existing `/loop` skill, one pass per tick; this agent never sleeps/polls on its own.
+- Runs via the built-in `/loop` skill (not cairn-owned), one pass per tick; this agent never sleeps/polls on its own.
 - **First entry**: record Watch Origin (`coding-chain` or `review`) and Sibling PR/MRs if any; initialize a Watch Ledger section in the per-target file (Watch Origin, Sibling targets, Seen discussion/comment IDs, Approval State, Merge Prompt Shown For, Last Tick — obtain via `Bash date -u +%Y-%m-%dT%H:%M:%SZ`, never estimated).
 - **Per tick**: refresh Input Resolution including current state (`open`/`merged`/`closed`) and approval status (GitHub: `gh pr view --json reviewDecision,mergeStateStatus`; GitLab: `glab api projects/:id/merge_requests/<iid>/approvals --repo <group/project>`). Terminate per Merge Termination (Step 4 below) on `closed`/`merged`. Otherwise diff comments/discussions against the ledger for (a) new replies to this agent's own findings (reuse Fix-Verification Round's logic unchanged) and (b) new threads opened by anyone else; detect approval-state changes.
 - Notify new threads (author, snippet, link); draft round replies for (a) and either a substantive response or a lightweight FYI/ack note for (b); append to the ledger file, bump Last Tick.
@@ -240,8 +240,8 @@ Expected: passes.
 git add agents/pr-reviewer.md
 git commit -m "Add Thread Watch, Approval-to-Merge Gate, Merge Termination, Pushback Triage to pr-reviewer
 
-Thread Watch stays explicit opt-in, driven by cairn's existing /loop
-skill. Approval-to-Merge Gate never auto-merges and runs one more
+Thread Watch stays explicit opt-in, driven by the built-in /loop
+skill (not cairn-owned). Approval-to-Merge Gate never auto-merges and runs one more
 full-diff pass before an actual merge. GitHub mechanics via gh,
 GitLab mechanics unchanged from maestro's original.
 
@@ -305,12 +305,13 @@ Expected: passes clean, no leftover `<TODO placeholder>` markers anywhere in the
 - [ ] **Step 6: Headless smoke test**
 
 ```bash
+CAIRN_ROOT="$(pwd)"   # run this from inside the repo/worktree where agents/pr-reviewer.md was just written — NOT a hardcoded path, this plan may run from a worktree
 mkdir -p /tmp/cairn-pr-reviewer-test && cd /tmp/cairn-pr-reviewer-test && git init -q
 git commit --allow-empty -q -m "chore: initial commit"
 git remote add origin https://github.com/octocat/Hello-World.git
-claude -p "review PR #1 on this repo" --plugin-dir /Users/jaysondelosreyes/cairn --permission-mode bypassPermissions --output-format text
+claude -p "review PR #1 on this repo" --plugin-dir "$CAIRN_ROOT" --permission-mode bypassPermissions --output-format text
 ```
-Expected: agent detects `github.com` from `origin`, resolves the `gh` path, runs Input Resolution and Initial Review mode, invoking `Skill(skill: "code-review", ...)`. This is a real public repo/PR so the call should actually resolve — inspect the reported output for a well-formed draft (or a clean "no findings"/auth-required report if `gh auth status` isn't configured in this environment) rather than a crash or a `<TODO placeholder>` leaking into the output.
+Expected: agent detects `github.com` from `origin`, resolves the `gh` path, runs Input Resolution and Initial Review mode, invoking `Skill(skill: "code-review", ...)`. This is a real public repo/PR so the call should actually resolve — inspect the reported output for **positive evidence** the new `pr-reviewer` agent actually ran (its own draft format, its own mode-detection language, or its own EXIT & DERAILMENT copy — not just "no crash"), since `--plugin-dir` pointing at the wrong tree would silently produce a plausible-looking but unrelated response. A clean "no findings"/auth-required report is fine as long as it's clearly `pr-reviewer`'s own voice, not a generic fallback.
 
 - [ ] **Step 7: Commit**
 
@@ -375,6 +376,14 @@ Insert directly after the `release-manager` paragraph added by the release-manag
 
 ```markdown
 **`pr-reviewer` (agents/)** — reviews a GitHub PR or GitLab MR end-to-end: resolves the target, generates findings, drafts them, posts as comments only after explicit confirmation. GitHub targets delegate finding-generation to `Skill(skill: "code-review", ...)` directly (cairn agents can hold `Skill`, unlike maestro's subagents — no Mid-Run Skill Handoff relay needed); GitLab targets are reviewed self-implemented, mirroring `code-review`'s categories and effort levels. Re-invocable as a Fix-Verification Round (delta-diff since the last round, dated follow-up replies) without re-running the review. Also supports an explicit opt-in Thread Watch mode (driven by `/loop`, one pass per tick) with an Approval-to-Merge Gate that never auto-merges — every approval-state change gets a fresh confirmation, and a full-diff pass runs once more right before an actual merge. Writes one append-across-rounds `docs/.reviews/<host>-<owner-repo>-<number>.md`. Terminal, except a coding-chain-origin Thread Watch merge detection, which emits a mid-run marker for the main loop (never flips tracker Status itself — `task-orchestrator`/`project-manager` own that). Ported from maestro's GitLab-only `gitlab-mr-reviewer`, generalized to both hosts. Triggered by manual dispatch, `intent-analyzer` `review` category + judgment-call mapping, or `/cairn-watch-pr` for Thread Watch specifically. See `docs/.specs/2026-08-18-pr-reviewer-design.md` for the full design.
+```
+
+- [ ] **Step 1.5: Write the `review` category routing mapping in `CLAUDE.md`**
+
+`intent-analyzer` already emits `review` as a category with no documented destination anywhere in `CLAUDE.md` — every other category that reaches a dispatch (`coding`) has a documented judgment-call mapping (see the "Coding-chain sequence" section); `review` currently has none. Insert a new subsection directly after the "Coding-chain sequence" section (before `/cairn-setup`'s paragraph):
+
+```markdown
+**`review` category routing (documented, not a change to `agents/intent-analyzer.md`):** a `ROUTING DECISION: review` classification whose normalized request targets a specific PR/MR (a URL, PR/MR number, or branch — as opposed to a local diff/branch review with no remote target, which stays the plain `code-review` skill invoked directly) dispatches to `pr-reviewer`. Same "Claude's own documented judgment call" pattern as the coding-chain's Direct/Chain routing above — `agents/intent-analyzer.md` itself is unmodified.
 ```
 
 - [ ] **Step 2: Add the `/cairn-watch-pr` command paragraph to `CLAUDE.md`**

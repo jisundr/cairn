@@ -39,7 +39,7 @@ Two environment differences from maestro change the shape of the port:
 2. Get findings:
    - **GitHub** — `Skill(skill: "code-review", args: "<PR number or URL>")` (no `--comment`) at the effort level requested (default: whatever `/code-review`'s own default is). `--comment` is deliberately omitted: it makes `code-review` post inline immediately, which would bypass this agent's own draft/confirm/post separation (see Hard requirements) — findings come back to `pr-reviewer` to draft, save, and post itself, same as the GitLab path.
    - **GitLab** — run the review directly against the fetched diff, same categories + effort level as the GitHub path (see Scope decision above).
-3. Draft Phase — format findings (same `## Finding N — <summary> _(<category>)_` / File / Line / snippet / suggested-fix shape maestro used), iterate freely with the user (cheap, local, no gate), then mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` once the user confirms the draft is final — not itself a confirmation gate.
+3. Draft Phase — format findings (same `## Finding N — <summary> _(<category>)_` / File / Line / snippet / suggested-fix shape maestro used), iterate freely with the user (cheap, local, no gate), with the first version saved to `docs/.reviews/<host>-<owner-repo>-<number>.md` immediately, before it's ever presented — mandatory, automatic, not itself a confirmation gate — and re-saved in place on every later revision.
 4. Confirmation & Posting Phase (see below).
 5. Post-completion offer: "Watch this PR/MR for new threads until merged? (Y/N)" — declining is a clean no-op.
 
@@ -92,7 +92,7 @@ Never auto-merges. Presents the choice via `AskUserQuestion` every time the appr
 ## Hard requirements (carried over, host-neutral)
 
 - Draft-then-post are two separate, explicit gates — draft iteration is cheap/local, posting is visible to others and hard to reverse.
-- Mandatory auto-save to the per-target `docs/.reviews/` file as soon as a draft is finalized, in every mode — not itself a confirmation gate.
+- Mandatory auto-save to the per-target `docs/.reviews/` file the moment a draft's first version is produced, in every mode, before it's presented — not itself a confirmation gate; re-saved in place on every later revision.
 - Always check for this agent's own prior comments before posting again, to avoid duplicates on re-run.
 - Never check out the target's source branch in the user's working tree — fetch only.
 - Every host-CLI command runs from inside a git repository (both `gh` and `glab` resolve target context from the local git remote).

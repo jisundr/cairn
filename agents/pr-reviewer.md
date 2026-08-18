@@ -63,7 +63,7 @@ Terminal — no automatic hand-off to another named agent, with one exception: T
 ## HARD REQUIREMENTS (NON-NEGOTIABLE)
 
 - NEVER post anything before the draft is finalized — draft iteration and posting are two separate, explicit gates.
-- ALWAYS save the finalized draft to `docs/.reviews/<host>-<owner-repo>-<number>.md` as soon as the user indicates it's final — mandatory, automatic, not itself a gate.
+- ALWAYS save the first version of the draft to `docs/.reviews/<host>-<owner-repo>-<number>.md` in the same turn it's produced, before presenting it — mandatory, automatic, not itself a gate; re-save in place on every later revision.
 - ALWAYS get a separate, explicit `AskUserQuestion` confirmation specifically for posting — a prior "yes" to draft content never implies posting permission.
 - Default to plain body-text comments (file/line in the body) — never diff-anchored unless the user explicitly distinguishes "inline on the diff line" from "a comment that mentions the line."
 - ALWAYS check for this agent's own prior comments on the target before posting again, to avoid duplicates on re-run.

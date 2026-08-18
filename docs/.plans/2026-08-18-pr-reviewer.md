@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Draft-then-post are two separate, explicit gates in every mode — never combined.
-- Mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` as soon as a draft is finalized — not itself a confirmation gate.
+- Mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` the moment a draft's first version is produced, before it's presented — not itself a confirmation gate; re-saved in place on every later revision.
 - Exactly one file per PR/MR, appended across rounds (never a new timestamped file per round, never truncated).
 - Never checks out the target's source branch — fetch only.
 - Default to plain body-text comments (file/line in the body) — never diff-anchored/inline unless the user explicitly asks, and even then confirm the exact host mechanism before attempting it.
@@ -86,7 +86,7 @@ Model the shape on `agents/codebase-auditor.md` lines 9–25. Content requiremen
 
 Must include, near-verbatim from the spec (host-neutral rephrasing of maestro's originals):
 - NEVER post anything before the draft is finalized — draft iteration and posting are two separate, explicit gates.
-- ALWAYS save the finalized draft to `docs/.reviews/<host>-<owner-repo>-<number>.md` as soon as the user indicates it's final — mandatory, automatic, not itself a gate.
+- ALWAYS save the first version of the draft to `docs/.reviews/<host>-<owner-repo>-<number>.md` in the same turn it's produced, before presenting it — mandatory, automatic, not itself a gate; re-save in place on every later revision.
 - ALWAYS get a separate, explicit `AskUserQuestion` confirmation specifically for posting — a prior "yes" to draft content never implies posting permission.
 - Default to plain body-text comments (file/line in the body) — never diff-anchored unless the user explicitly distinguishes "inline on the diff line" from "a comment that mentions the line."
 - ALWAYS check for this agent's own prior comments on the target before posting again, to avoid duplicates on re-run.
@@ -110,7 +110,7 @@ Follow spec "Flow" → "Initial Review mode" exactly:
 2. Get findings:
    - GitHub: `Skill(skill: "code-review", args: "<PR number or URL>")` — no `--comment`. Omitting it is deliberate: `--comment` makes `code-review` post inline immediately, bypassing this agent's own draft/confirm/post separation (Global Constraints, first bullet). Findings come back to this agent to draft, save, and post itself, same as the GitLab path.
    - GitLab: review directly against the fetched diff — same categories (correctness + reuse/simplification/efficiency) and effort levels as the GitHub path; no skill to delegate to.
-3. Draft Phase — format findings, iterate freely (cheap, local, no gate), mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` once the user confirms the draft is final.
+3. Draft Phase — format findings, save the first version to `docs/.reviews/<host>-<owner-repo>-<number>.md` immediately (mandatory, before presenting it), then iterate freely with the user (cheap, local, no gate), re-saving in place on every revision.
 4. Confirmation & Posting Phase (Task 4 — write a `<TODO placeholder — see Task 4>` marker comment in this step for now; Task 4 replaces it with the real shared section and removes the marker).
 5. Post-completion offer: "Watch this PR/MR for new threads until merged? (Y/N)" — declining is a clean no-op; accepting starts Thread Watch (Task 3).
 
@@ -152,7 +152,7 @@ Insert a new `## Fix-Verification Round mode` section after `## Initial Review m
 2. Fetch comments/discussions (paginated where the host API requires it — GitLab's `--paginate` + `jq -s 'add'`; GitHub's `gh api --paginate`), identify this agent's own prior findings and any author replies, record each finding's thread/discussion identifier, original file/line, and summary.
 3. Delta-diff since the last reviewed SHA (recorded in the per-target file from the prior round) against each open finding's file/line — classify `fixed` / `partially-fixed` / `still-open` / `disputed`.
 4. Pushback Triage for any `disputed` finding (Task 3 writes the full guidance section; for now, inline the three-rule summary from the spec directly in this step: verify factual pushback against the diff not memory; acknowledge scope/judgment-call pushback without relitigating; require a concrete spec to reopen a declined finding).
-5. Draft dated, self-contained round replies: `**Update (<date>):** <tag> — <1-3 sentences>`, mapping FIX ASSESSMENT state to tag (`fixed`→`fix-confirmed`, `partially-fixed`→`partially-fixed`, `still-open`→`still-open`, `disputed`→`concession`/`reopened-with-spec`/`decline-acknowledged`). Same iterate-then-mandatory-save pattern as Initial Review, appended to the same per-target file.
+5. Draft dated, self-contained round replies: `**Update (<date>):** <tag> — <1-3 sentences>`, mapping FIX ASSESSMENT state to tag (`fixed`→`fix-confirmed`, `partially-fixed`→`partially-fixed`, `still-open`→`still-open`, `disputed`→`concession`/`reopened-with-spec`/`decline-acknowledged`). Same save-first-then-iterate pattern as Initial Review (first version saved immediately, re-saved in place on each revision), appended to the same per-target file.
 6. Confirmation & Posting Phase (same `<TODO placeholder — see Task 4>` marker as Task 1 Step 5; Task 4 wires it up for real).
 
 - [ ] **Step 2: Validate**

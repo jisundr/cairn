@@ -93,14 +93,15 @@ Two entry points reach Chain flow: `/cairn-run-task <slug-or-path-or-ticket>` (r
 
 Bump `version` in `.claude-plugin/plugin.json` (semver — minor for new features, patch for fixes) whenever a change is something a consuming project needs to see reflected: new/changed agents, commands, or hooks, or any behavior change to what's already wired into a project. `log-version.sh` stamps this value into every session's `.cairn/version-log.jsonl` entry — an unbumped version makes that log lie about what actually ran, and `/cairn-doctor`'s upgrade check has nothing to detect. Skip the bump only for changes with no user-visible effect (docs, tests, internal refactors).
 
-`release-manager` (see above) does not replace this rule — it reads whatever `version` is currently committed (the accumulated result of every manual per-change bump since the last tag) and proposes the release tag from that, never overriding a bump you've already made by hand.
+`release-manager` (see above) does not replace this rule — it reads whatever `version` is currently committed (the accumulated result of every manual per-change bump since the last tag) as its baseline, then proposes and writes a further bump on top of it for the release tag itself (e.g. a hand-bumped `0.18.0` becomes the release-manager-proposed `0.19.0` if there's another `feat:`-worthy change since). The two are sequential, not competing: your manual bumps stay authoritative for what's committed day-to-day, `release-manager` only decides the final release-point version at cut time, and always shows its proposed version for confirmation before writing it.
 
 ## Testing
 
-Two distinct kinds of test, don't conflate them:
+Three distinct kinds of test, don't conflate them:
 
 - **`tests/test_usage_dashboard.py`** — ordinary unit tests over pure functions (JSONL parsing/aggregation, using `tmp_path` fixtures). Deterministic, always green.
 - **`tests/test_intent_routing.py`** — an *eval*, not a unit test. Each case is a real classification decision from a live `claude` CLI call (`model: haiku`, matching the shipped agent) on a prompt chosen to sit near a category boundary. A single case flipping between runs is expected model variance, not a regression — the test asserts an aggregate pass rate (`MIN_PASS` in that file) across the whole case set, not per-case. Only treat a case as actually broken if it fails consistently across reruns, or the failure reason itself is new.
+- **`tests/smoke/*.sh`** (`bash tests/smoke/run_all.sh [plugin-dir]`) — headless scratch-repo scenarios for markdown agent/command definitions with no unit-testable code, driving `claude -p ... --plugin-dir ... --permission-mode bypassPermissions` against throwaway git repos. Requires `claude` on PATH with real auth. Each script only exercises what a non-interactive run can reach — for `release-manager` that's Detect→Propose; anything gated behind an `AskUserQuestion` confirmation (Execute-step mechanics) has no automated coverage and is verified by code inspection instead. `pytest tests/ -v -s` does not collect these — run the smoke suite separately.
 
 <!-- cairn:start -->
 ## cairn (mandatory entrypoint)

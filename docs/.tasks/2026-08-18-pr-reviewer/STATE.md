@@ -2,8 +2,8 @@
 
 Mode: Attended
 Phase: PUBLISH
-Handoff to: task-orchestrator (Publish Mode)
-Status: Doc Post-Impl clean (1 HIGH — DOC-001 draft save-timing contradiction between HARD REQUIREMENTS and Initial Review Step 3 — fixed across agents/pr-reviewer.md, spec, plan; committed b418470). Per user decision, publishing Task 1 (Input Resolution + Initial Review mode) now as its own reviewable increment rather than holding for Tasks 2-4 — frontmatter description and WORKFLOW INTENT trimmed to claim only what's implemented (Fix-Verification Round/Thread Watch marked not-yet-built), bare PR/MR-number input form added to description (DOC-002 fixed as side effect). Re-ran tests/smoke/run_pr_reviewer.sh against the trimmed file: 2/2 pass, confirming the description trim doesn't affect dispatch/behavior. `claude plugin validate . --strict` passes. Committed 8b4fbdf. Ready for Publish Mode — Tasks 2-4 remain unimplemented (expected, not a gap; this is a deliberate partial-capability ship).
+Handoff to: none (terminal)
+Status: Consolidated commit prepared — Task 1 (Input Resolution + Initial Review mode) only; Tasks 2-6 (Fix-Verification Round, Thread Watch, Approval-to-Merge Gate, /cairn-watch-pr, CLAUDE.md/README docs) remain in docs/.plans/2026-08-18-pr-reviewer.md as follow-up work, plan file retained (no ticket sync, never auto-deleted). UAT.md written. Version bumped 0.17.0 → 0.18.0 (new user-visible agent) in this commit, main's committed value re-read first (0.17.0, unbumped by any sibling branch). No .harness/ drift to surface (absent entirely, noted non-blocking since PLAN phase) — consolidated drift question skipped per explicit instruction, same as this session's other 3 published tasks. Usage/cost table unavailable (`scripts/usage_dashboard.py --task-report pr-reviewer` run from main repo root found no task folder there — the task folder only exists in this worktree pre-merge; non-blocking, omitted from PR body). No ticket configured — Status Sync skipped, local-only. PR URL pending — added below once opened.
 Plan: docs/.plans/2026-08-18-pr-reviewer.md
 Ticket: none
 Worktree: /Users/jaysondelosreyes/cairn/.worktrees/feature-pr-reviewer

@@ -36,7 +36,7 @@ Two environment differences from maestro change the shape of the port:
 
 1. Reference Style Lookup — sample existing comments/notes for a matching structure to draft in; fall back to a default format and say so if none found.
 2. Get findings:
-   - **GitHub** — `Skill(skill: "code-review", args: "<PR number or URL> --comment")` at the effort level requested (default: whatever `/code-review`'s own default is).
+   - **GitHub** — `Skill(skill: "code-review", args: "<PR number or URL>")` (no `--comment`) at the effort level requested (default: whatever `/code-review`'s own default is). `--comment` is deliberately omitted: it makes `code-review` post inline immediately, which would bypass this agent's own draft/confirm/post separation (see Hard requirements) — findings come back to `pr-reviewer` to draft, save, and post itself, same as the GitLab path.
    - **GitLab** — run the review directly against the fetched diff, same categories + effort level as the GitHub path (see Scope decision above).
 3. Draft Phase — format findings (same `## Finding N — <summary> _(<category>)_` / File / Line / snippet / suggested-fix shape maestro used), iterate freely with the user (cheap, local, no gate), then mandatory auto-save to `docs/.reviews/<host>-<owner-repo>-<number>.md` once the user confirms the draft is final — not itself a confirmation gate.
 4. Confirmation & Posting Phase (see below).
@@ -52,7 +52,7 @@ Two environment differences from maestro change the shape of the port:
 
 ### Thread Watch mode (opt-in only, runs via `/loop`)
 
-Fix-Verification Round run repeatedly via cairn's existing `/loop` skill, one pass per tick, terminating on merge/close. `/loop` owns the timer; this agent never sleeps or polls on its own.
+Fix-Verification Round run repeatedly via the built-in `/loop` skill (not cairn-owned — a marketplace/core skill this environment already ships), one pass per tick, terminating on merge/close. `/loop` owns the timer; this agent never sleeps or polls on its own.
 
 1. On first entry: record Watch Origin (`coding-chain` or `review`) and Sibling PR/MRs if any; initialize a Watch Ledger section in the same per-target file (Watch Origin, Sibling targets, Seen discussion/comment IDs, Approval State, Merge Prompt Shown For, Last Tick).
 2. Per tick: refresh input resolution including current state (`open`/`merged`/`closed`) and approval status (GitHub: `gh pr view --json reviewDecision,mergeStateStatus`; GitLab: `glab api .../approvals`, unchanged from maestro). Terminate on `closed`/`merged` per Merge Termination rules below. Otherwise diff comments/discussions against the ledger for (a) new replies to this agent's own findings and (b) new threads opened by anyone else; detect approval-state changes.

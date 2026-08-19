@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cairn Dashboard — Mockup</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --border: #e6e4de; --text: #1c1c1a; --text-dim: #6b6b62;
+    --text-faint: #9a988f; --primary: #3d6fd9; --success: #3d8b5f; --warning: #d9a441;
+    --error: #b5482f; --info: #4472c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171a; --surface: #1e2124; --border: #2c2f33; --text: #e9e7e0; --text-dim: #9c9a92;
+      --text-faint: #6d6b63; --primary: #5b8aef; --success: #4fae7c; --warning: #e0b256; --error: #d16249;
+      --info: #6a94e0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15171a; --surface: #1e2124; --border: #2c2f33; --text: #e9e7e0; --text-dim: #9c9a92;
+    --text-faint: #6d6b63; --primary: #5b8aef; --success: #4fae7c; --warning: #e0b256; --error: #d16249;
+    --info: #6a94e0;
+  }
+
+  * { box-sizing: border-box; }
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+    .pulse { animation: pulse 1.8s ease-in-out infinite; }
+  }
+  button:focus-visible, .pane-toggle:focus-visible, [role="tab"]:focus-visible, .info-icon:focus-visible {
+    outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column;
+  }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  header {
+    display: flex; align-items: center; gap: 1.25rem; padding: .85rem 1.5rem;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  h1 { font-size: 1.25rem; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+  h1 span { color: var(--primary); }
+  .tabs { display: flex; gap: .2rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .2rem; }
+  .tab {
+    padding: .4rem .85rem; border-radius: 6px; cursor: pointer; color: var(--text-dim);
+    font-size: .82rem; font-weight: 500; border: none; background: none;
+  }
+  .tab[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  #project { color: var(--text-faint); font-size: .76rem; margin-left: auto; }
+
+  .toolbar { display: flex; gap: 1.25rem; align-items: center; padding: .75rem 1.5rem; flex-wrap: wrap; }
+  .segmented { display: flex; gap: .2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .2rem; }
+  .segmented button {
+    border: none; background: none; padding: .32rem .7rem; border-radius: 6px; cursor: pointer;
+    color: var(--text-dim); font-size: .78rem; font-weight: 500;
+  }
+  .segmented button[aria-selected="true"] { background: var(--bg); color: var(--text); }
+  .sort-control { display: flex; align-items: center; gap: .4rem; }
+  .anchor-nav { display: flex; align-items: center; gap: .4rem; }
+  .icon-btn {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 6px;
+    width: 1.8rem; height: 1.8rem; display: grid; place-items: center; cursor: pointer;
+    color: var(--text-dim); font-size: .95rem; line-height: 1;
+  }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+  .icon-btn:not(:disabled):hover { color: var(--text); }
+  .anchor-label { font-size: .8rem; font-weight: 600; color: var(--text); min-width: 9rem; text-align: center; }
+  #anchor-latest {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 6px;
+    padding: .3rem .65rem; font-size: .76rem; font-weight: 500; color: var(--text-dim); cursor: pointer;
+  }
+  #anchor-latest:hover { color: var(--text); }
+  .info-icon { color: var(--text-faint); font-size: .95rem; cursor: help; border-radius: 50%; }
+  .info-icon:hover, .info-icon:focus-visible { color: var(--text-dim); }
+
+  main { padding: 0 1.5rem 2rem; flex: 1 1 auto; overflow-y: auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .9rem; margin: 1rem 0; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .85rem 1rem;
+  }
+  .stat .label { font-size: .68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; font-weight: 600; }
+  .stat .value { font-size: 1rem; font-weight: 700; }
+  .stat .value.accent { color: var(--primary); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1rem 1.1rem; margin-bottom: .9rem;
+  }
+  .card .head { font-size: 1rem; color: var(--text); letter-spacing: normal; margin-bottom: .8rem; font-weight: 600; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: .9rem; margin-bottom: .9rem; }
+
+  .chart-card svg { width: 100%; height: 140px; overflow: visible; display: block; }
+  .chart-card .bar { fill: var(--primary); opacity: .85; }
+  .chart-card .axis { font-size: 9px; fill: var(--text-faint); }
+
+  .heatmap-months { display: flex; gap: 3px; font-size: .64rem; color: var(--text-faint); margin-bottom: .3rem; padding-left: 0; }
+  .heatmap-month-label { width: 13px; flex-shrink: 0; overflow: visible; white-space: nowrap; }
+  .heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: .2rem; }
+  .heatmap-week { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  .heatmap-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--bg); border: 1px solid var(--border); box-sizing: border-box; }
+  .heatmap-cell-empty { background: transparent; border-color: transparent; }
+  .heatmap-cell.level-1 { background: color-mix(in srgb, var(--primary) 25%, var(--bg)); border-color: transparent; }
+  .heatmap-cell.level-2 { background: color-mix(in srgb, var(--primary) 50%, var(--bg)); border-color: transparent; }
+  .heatmap-cell.level-3 { background: color-mix(in srgb, var(--primary) 75%, var(--bg)); border-color: transparent; }
+  .heatmap-cell.level-4 { background: var(--primary); border-color: transparent; }
+  .heatmap-legend { display: flex; align-items: center; gap: .3rem; margin-top: .5rem; font-size: .68rem; color: var(--text-faint); }
+  .heatmap-legend .heatmap-cell { width: 11px; height: 11px; }
+
+  .rank-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem; align-items: center; padding: .3rem 0; font-size: .8rem; }
+  .rank-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-row .bar-track { grid-column: 1 / -1; height: 4px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-bottom: .45rem; }
+  .rank-row .bar-fill { height: 100%; background: var(--primary); }
+  .rank-row .num { color: var(--text-dim); white-space: nowrap; }
+
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .5rem .55rem; border-bottom: 1px solid var(--border); }
+  th { font-size: .66rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  th.num { text-align: right; }
+  td.num { text-align: right; }
+  .table-wrap { overflow-x: auto; }
+  th button {
+    all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: .2rem;
+    font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit;
+  }
+  th button:hover { color: var(--text-dim); }
+  th button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
+
+  .filter-row { display: flex; gap: 1.1rem; flex-wrap: wrap; margin-bottom: .8rem; }
+  .filter-field { display: flex; align-items: center; gap: .4rem; }
+  .filter-field label { font-size: .74rem; color: var(--text-faint); }
+  .filter-field select {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 6px; padding: .28rem .5rem; font-size: .78rem; cursor: pointer;
+  }
+
+  .pagination { display: flex; align-items: center; gap: .8rem; margin-top: .8rem; font-size: .76rem; color: var(--text-dim); }
+  .pagination button {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 6px;
+    padding: .3rem .65rem; cursor: pointer; color: var(--text-dim); font-size: .76rem;
+  }
+  .pagination button:disabled { opacity: .35; cursor: default; }
+  .pagination button:not(:disabled):hover { color: var(--text); }
+
+  /* CSS-only tooltip via data-tooltip — used instead of the native title
+     attribute for the Tokens breakdown, which is easy to miss (OS-styled,
+     ~1s hover delay before it appears, no dark-mode awareness). This one
+     shows immediately and matches the page's own palette. */
+  [data-tooltip] { position: relative; cursor: default; }
+  [data-tooltip]:hover::after {
+    content: attr(data-tooltip); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); font-size: .7rem; font-weight: 500; white-space: nowrap;
+    padding: .35rem .6rem; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.18); z-index: 20; pointer-events: none;
+  }
+  [data-tooltip]:hover::before {
+    content: ""; position: absolute; bottom: 122%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--text); z-index: 20; pointer-events: none;
+  }
+
+  /* Tracker: Board */
+  .board { display: flex; gap: .8rem; overflow-x: auto; padding-bottom: .4rem; align-items: flex-start; min-height: calc(100vh - 140px); }
+  .col { flex: 0 0 240px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .7rem; }
+  .col h2 { font-size: 1rem; color: var(--text); margin: .1rem .1rem .6rem; display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+  .col h2 > span:last-child { font-size: .78rem; color: var(--text-faint); font-weight: 400; }
+  .col h2 .name { display: flex; align-items: center; gap: .4rem; }
+  .col h2 .name::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: 0 0 auto; }
+  /* Explicit per-status dot color, all 6 statuses (Idea stays neutral --text-faint, intentional "no urgency") */
+  .col-idea h2 .name::before { background: var(--text-faint); }
+  .col-groomed h2 .name::before { background: var(--info); }
+  .col-review h2 .name::before { background: var(--primary); }
+  .col-progress h2 .name::before { background: var(--warning); }
+  .col-blocked h2 .name::before { background: var(--error); }
+  .col-done h2 .name::before { background: var(--success); }
+  .task-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: .75rem 1rem; margin-bottom: .55rem; }
+  .task-card .milestone { font-size: .6875rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .3rem; }
+  .task-card .slug { font-weight: 600; font-size: .8rem; display: flex; align-items: center; gap: .4rem; }
+  /* Status dot on the card itself too — not just the column header — so a card
+     stays self-identifying once scrolled away from it. Same dot, not a border
+     accent: a colored border-left on a rounded card is the AI-UI tell the
+     Swarms tab's own Board/roadmap redesign already fixed once this session. */
+  .task-card .slug::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: 0 0 auto; }
+  .col-groomed .task-card .slug::before { background: var(--info); }
+  .col-review .task-card .slug::before { background: var(--primary); }
+  .col-progress .task-card .slug::before { background: var(--warning); }
+  .col-blocked .task-card .slug::before { background: var(--error); }
+  .col-done .task-card .slug::before { background: var(--success); }
+  .task-card .scope { color: var(--text-dim); font-size: .76rem; margin-top: .3rem; line-height: 1.35; }
+
+  /* Tracker: Roadmap */
+  .rmap { display: flex; gap: 1.3rem; overflow-x: auto; padding: .5rem 0 1rem; align-items: flex-start; min-height: calc(100vh - 140px); }
+  .rstation { flex: 0 0 230px; }
+  .rnoderow { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; margin-bottom: .6rem; }
+  .rnoderow::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); background: var(--border); }
+  .rstation.filled .rnoderow::before { background: var(--primary); }
+  .rstation:first-child .rnoderow::before { left: 50%; }
+  .rstation:last-child .rnoderow::before { right: 50%; }
+  .rstation .node { position: relative; z-index: 1; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: .72rem; font-weight: 700; border: 2px solid var(--border); background: var(--bg); color: var(--text-dim); }
+  .rstation.done .node { border-color: var(--success); background: var(--success); color: #fff; }
+  .rstation.active .node { border-color: var(--primary); color: var(--primary); }
+  .rstation .rname { font-weight: 600; font-size: .8rem; }
+  .rstation .rcount { color: var(--text-faint); font-size: .7rem; margin-left: .3rem; font-weight: 400; }
+  .icard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .55rem .7rem; margin-top: .5rem; font-size: .76rem; display: flex; align-items: center; gap: .4rem; }
+  .icard::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: 0 0 auto; }
+  .icard.is-done::before { background: var(--success); }
+  .icard.is-done { color: var(--text-dim); }
+
+  /* Swarms: list + detail split */
+  .swarms-layout { display: flex; gap: 1rem; align-items: stretch; margin-top: 1rem; min-height: calc(100vh - 140px); }
+  .swarm-list-pane { flex: 0 0 38%; display: flex; flex-direction: column; gap: .5rem; align-content: flex-start; }
+  .swarm-detail-pane { flex: 1 1 62%; min-width: 0; display: flex; }
+  .swarm-detail-pane > .detail-card, .swarm-detail-pane > .detail-empty { flex: 1 1 auto; }
+
+  .swarm-list-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: .65rem .8rem; cursor: pointer;
+  }
+  .swarm-list-item.selected { border-color: var(--primary); background: var(--bg); }
+  .swarm-list-item .row1 { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .swarm-list-item .slug { font-weight: 700; font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  .swarm-list-item .row2 { display: flex; align-items: center; gap: .5rem; margin-top: .3rem; font-size: .74rem; color: var(--text-dim); }
+  .mini-progress { display: flex; gap: 2px; margin-top: .4rem; }
+  .mini-progress .seg { flex: 1 1 0; height: 4px; border-radius: 2px; background: var(--border); }
+  .mini-progress .seg.filled { background: var(--primary); }
+
+  .phase-pill { font-size: .66rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: .16rem .5rem; border-radius: 99px; background: var(--bg); color: var(--text-dim); border: 1px solid var(--border); flex: 0 0 auto; }
+  .phase-pill.handoff { background: var(--warning); color: #fff; border-color: transparent; }
+  .phase-pill.done { background: var(--success); color: #fff; border-color: transparent; }
+  .phase-pill.stalled { background: var(--error); color: #fff; border-color: transparent; }
+  .phase-pill.running { background: var(--primary); color: #fff; border-color: transparent; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.alive { background: var(--success); }
+  .dot.dead { background: var(--error); }
+  .dot.unknown { background: var(--text-faint); }
+
+  .detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; }
+  .detail-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .9rem; }
+  .detail-head-left { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+  .detail-slug { font-size: 1rem; font-weight: 700; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail-close { background: none; border: none; color: var(--text-faint); font-size: 1.1rem; line-height: 1; cursor: pointer; padding: .2rem .4rem; border-radius: 6px; flex: 0 0 auto; }
+  .detail-close:hover { color: var(--text); background: var(--bg); }
+
+  .detail-section { padding: .9rem 0; border-top: 1px solid var(--border); }
+  .detail-section:first-of-type { border-top: none; padding-top: 0; }
+
+  .timeline { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; font-size: .74rem; }
+  .timeline .step { padding: .15rem .5rem; border-radius: 99px; color: var(--text-faint); }
+  .timeline .step.done { color: var(--text-dim); }
+  .timeline .step.current { color: #fff; background: var(--primary); font-weight: 700; }
+  .timeline .step.paused { color: #fff; background: var(--warning); font-weight: 700; }
+  .timeline .arrow { color: var(--border); font-size: .7rem; }
+
+  .status-row { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
+  .detail-meta { display: flex; gap: 1.2rem; flex-wrap: wrap; color: var(--text-faint); font-size: .74rem; margin-top: .6rem; }
+  .detail-meta .k { margin-right: .3rem; }
+  .detail-meta .mono { color: var(--text-dim); }
+
+  .badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .8rem; font-weight: 600; padding: .25rem .6rem; border-radius: 99px; }
+  .badge.stalled { background: var(--error); color: #fff; }
+  .hint { color: var(--text-dim); font-size: .82rem; }
+  .elapsed { color: var(--text-dim); font-size: .78rem; white-space: nowrap; }
+
+  .detail-subhead { font-size: .68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin: 0 0 .5rem; }
+  .history-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .45rem; }
+  .history-log li { display: flex; gap: .6rem; font-size: .8rem; align-items: baseline; }
+  .history-log .hphase { font-weight: 600; color: var(--text); flex: 0 0 auto; }
+  .history-log .hnote { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+  .history-log .htime { color: var(--text-faint); font-size: .72rem; margin-left: auto; flex: 0 0 auto; }
+
+  .pane-tail {
+    margin-top: .3rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .6rem .7rem; font-size: .74rem; line-height: 1.5; color: var(--text-dim); white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    max-height: 240px; overflow-y: auto;
+  }
+
+  .empty { color: var(--text-faint); font-size: .84rem; padding: 2rem 0; text-align: center; }
+  .detail-empty { background: var(--surface); border: 1px dashed var(--border); border-radius: 10px; padding: 3rem 1rem; color: var(--text-faint); font-size: .84rem; text-align: center; display: flex; align-items: center; justify-content: center; }
+
+  @media (max-width: 720px) {
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .card-grid { grid-template-columns: 1fr; }
+    .board, .rmap { flex-direction: column; }
+    .col, .rstation { flex: 1 1 auto; }
+    .swarms-layout { flex-direction: column; }
+    .swarm-list-pane { flex: 1 1 auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cairn <span>Dashboard</span></h1>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-view="usage">Usage</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="tracker">Tracker</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="swarms">Swarms</button>
+  </div>
+  <div id="project">~/projects/cairn</div>
+</header>
+
+<div class="toolbar" id="toolbar-usage">
+  <div class="segmented" role="group" aria-label="Period" id="period-group">
+    <button aria-selected="true" data-period="daily">Daily</button>
+    <button aria-selected="false" data-period="weekly">Weekly</button>
+    <button aria-selected="false" data-period="monthly">Monthly</button>
+    <button aria-selected="false" data-period="yearly">Yearly</button>
+    <button aria-selected="false" data-period="ytd">YTD</button>
+  </div>
+  <div class="anchor-nav" id="anchor-nav" role="group" aria-label="Anchor navigation">
+    <button class="icon-btn" id="anchor-prev" aria-label="Previous">&#8249;</button>
+    <span class="anchor-label tabular" id="anchor-label"></span>
+    <button class="icon-btn" id="anchor-next" aria-label="Next">&#8250;</button>
+    <button id="anchor-latest">Latest</button>
+  </div>
+  <div class="segmented" role="group" aria-label="Timezone" id="tz-group">
+    <button aria-selected="false" data-tz="utc">UTC</button>
+    <button aria-selected="true" data-tz="local" id="tz-local-btn">Local</button>
+  </div>
+  <span class="info-icon" tabindex="0" role="button" aria-label="What do these controls mean?"
+    title="Period: Daily/Weekly/Monthly/Yearly are calendar-aligned to the anchor date; YTD is always this year to date, no anchor.&#10;Prev/next: step the anchor by one period unit; disabled past the earliest session or past today.&#10;Latest: jump the anchor back to today.&#10;UTC/Local: shifts hour/day/month bucket boundaries and all timestamps.">&#9432;</span>
+</div>
+<div class="toolbar" id="toolbar-tracker" style="display:none">
+  <div class="segmented" role="group" aria-label="Tracker view">
+    <button aria-selected="true" data-sub="board">Board</button>
+    <button aria-selected="false" data-sub="road">Roadmap</button>
+  </div>
+</div>
+<div class="toolbar" id="toolbar-swarms" style="display:none">
+  <div class="sort-control">
+    <div class="segmented" role="group" aria-label="Sort order">
+      <button aria-selected="true" data-sort="priority" title="Needs attention first: Handoff Needed &rarr; Stalled &rarr; Running &rarr; Done">Priority</button>
+      <button aria-selected="false" data-sort="recent" title="Most recently updated first, regardless of state">Recent activity</button>
+      <button aria-selected="false" data-sort="name" title="Chronological by slug (oldest task first)">Name</button>
+    </div>
+    <span class="info-icon" tabindex="0" role="button" aria-label="What do these sort options mean?"
+      title="Priority: needs attention first (Handoff Needed &rarr; Stalled &rarr; Running &rarr; Done).&#10;Recent activity: most recently updated first, regardless of state.&#10;Name: chronological by slug (oldest task first).">&#9432;</span>
+  </div>
+</div>
+
+<main>
+  <section class="view active" id="view-usage">
+    <div class="card">
+      <div class="head">Usage</div>
+      <div class="heatmap-months" id="heatmap-months"></div>
+      <div class="heatmap" id="usage-heatmap"></div>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        <div class="heatmap-cell"></div>
+        <div class="heatmap-cell level-1"></div>
+        <div class="heatmap-cell level-2"></div>
+        <div class="heatmap-cell level-3"></div>
+        <div class="heatmap-cell level-4"></div>
+        <span>More</span>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Cost</div><div class="value accent tabular" id="stat-cost">$0.00</div></div>
+      <div class="stat"><div class="label">Tokens</div><div class="value tabular" id="stat-tokens">0</div></div>
+      <div class="stat"><div class="label">Calls</div><div class="value tabular" id="stat-calls">0</div></div>
+      <div class="stat"><div class="label">Sessions</div><div class="value tabular" id="stat-sessions">0</div></div>
+      <div class="stat"><div class="label">Cache hit</div><div class="value tabular" id="stat-cachehit">0%</div></div>
+    </div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="head">By model</div>
+        <div id="by-model"></div>
+      </div>
+      <div class="card">
+        <div class="head">By cairn version</div>
+        <div id="by-version"></div>
+      </div>
+      <div class="card">
+        <div class="head">Top subagents</div>
+        <div id="by-subagent"></div>
+      </div>
+      <div class="card">
+        <div class="head">Top skills</div>
+        <div id="by-skill"></div>
+      </div>
+    </div>
+    <div class="card chart-card">
+      <div class="head">Cost over time</div>
+      <svg viewBox="0 0 700 150" preserveAspectRatio="none" id="usage-chart">
+        <g class="bars"></g>
+        <g class="labels"></g>
+      </svg>
+    </div>
+    <div class="card">
+      <div class="head">Sessions</div>
+      <div class="filter-row">
+        <div class="filter-field">
+          <label for="filter-model">Model</label>
+          <select id="filter-model"><option value="all">All</option></select>
+        </div>
+        <div class="filter-field">
+          <label for="filter-version">Version</label>
+          <select id="filter-version"><option value="all">All</option></select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="sessions-head"></tr></thead>
+          <tbody id="sessions-body"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="sessions-empty" style="display:none"></div>
+      <div class="pagination" id="sessions-pagination" style="display:none">
+        <button id="sessions-prev">&#8249; Prev</button>
+        <span class="tabular" id="sessions-page-info"></span>
+        <button id="sessions-next">Next &#8250;</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-tracker">
+    <div class="board" id="board">
+      <div class="col"><h2><span class="name">Idea</span><span>1</span></h2>
+        <div class="task-card"><div class="slug">cli-export</div><div class="scope">Export usage as CSV via a new CLI flag</div></div>
+      </div>
+      <div class="col col-groomed"><h2><span class="name">Groomed</span><span>1</span></h2>
+        <div class="task-card"><div class="milestone">v0.19 milestone</div><div class="slug">notes-local-file</div><div class="scope">Per-user gitignored .harness/notes.local.md</div></div>
+      </div>
+      <div class="col col-progress"><h2><span class="name">In Progress</span><span>2</span></h2>
+        <div class="task-card"><div class="milestone">v0.19 milestone</div><div class="slug">dashboard-react-redesign</div><div class="scope">Vite+React frontend, Swarms tab</div></div>
+        <div class="task-card"><div class="slug">landing-page</div><div class="scope">Marketing page for cairn plugin</div></div>
+      </div>
+      <div class="col col-review"><h2><span class="name">In Review</span><span>0</span></h2>
+        <div class="empty">Nothing in review right now.</div>
+      </div>
+      <div class="col col-blocked"><h2><span class="name">Blocked</span><span>1</span></h2>
+        <div class="task-card"><div class="slug">impeccable-vendor</div><div class="scope">Waiting on marketplace approval</div></div>
+      </div>
+      <div class="col col-done"><h2><span class="name">Done</span><span>2</span></h2>
+        <div class="task-card"><div class="slug">swarms-tab-backend</div><div class="scope">parse_state_md, discover_swarms, /api/swarms</div></div>
+        <div class="task-card"><div class="slug">cairn-feedback</div><div class="scope">Sanitized bug feedback flow</div></div>
+      </div>
+    </div>
+    <div class="rmap" id="road" style="display:none">
+      <div class="rstation done filled"><div class="rnoderow"><div class="node">✓</div></div><div class="rname">Foundation<span class="rcount">2/2 · Done</span></div>
+        <div class="icard is-done">swarms-tab-backend — parse_state_md, discover_swarms</div>
+        <div class="icard is-done">cairn-feedback — sanitized bug feedback flow</div>
+      </div>
+      <div class="rstation active filled"><div class="rnoderow"><div class="node">2</div></div><div class="rname">v0.19<span class="rcount">1/3 · In progress</span></div>
+        <div class="icard is-done">swarms-tab-backend — parse_state_md, discover_swarms</div>
+        <div class="icard">dashboard-react-redesign — Vite+React frontend, Swarms tab</div>
+        <div class="icard">notes-local-file — per-user gitignored .harness file</div>
+      </div>
+      <div class="rstation"><div class="rnoderow"><div class="node">3</div></div><div class="rname">Unsorted<span class="rcount">0/2 · Upcoming</span></div>
+        <div class="icard">cli-export — export usage as CSV</div>
+        <div class="icard">landing-page — marketing page for cairn plugin</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-swarms">
+    <div class="swarms-layout">
+      <div class="swarm-list-pane" id="swarm-list"></div>
+      <div class="swarm-detail-pane" id="swarm-detail"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Usage tab: mock session data + a single shared range filter every section
+  // reads from (stat grid, chart, rankings, sessions table) — modeled after
+  // maestro's token-usage-report periodWindow() pattern, which exists
+  // specifically because per-section-independent filtering silently drifted
+  // out of sync with the picker in an earlier version of that report.
+  function fmt(n) { return Math.round(n).toLocaleString(); }
+  function usd(n) { return '$' + n.toFixed(2); }
+
+  var SESSIONS = [
+    { id: '3fae21b0', ts: '2026-08-19T07:12:00Z', calls: 88, version: '0.18.0',
+      input: 210000, output: 62000, cacheRead: 1900000, cacheCreate: 40000,
+      models: [{ model: 'claude-sonnet-5', cost: 2.60 }, { model: 'claude-haiku-4-5', cost: 0.34 }],
+      subagents: { 'requirements-engineer': 5, 'qa-engineer': 3 }, skills: { 'writer-shared': 4 } },
+    { id: '9c02e77a', ts: '2026-08-19T06:03:00Z', calls: 54, version: '0.18.0',
+      input: 140000, output: 38000, cacheRead: 1100000, cacheCreate: 22000,
+      models: [{ model: 'claude-sonnet-5', cost: 1.61 }],
+      subagents: { 'qa-engineer': 4 }, skills: { 'writer-shared': 2 } },
+    { id: '1b88d4f1', ts: '2026-08-18T16:47:00Z', calls: 142, version: '0.18.0',
+      input: 380000, output: 95000, cacheRead: 3100000, cacheCreate: 70000,
+      models: [{ model: 'claude-sonnet-5', cost: 3.80 }, { model: 'claude-opus-5', cost: 0.40 }],
+      subagents: { 'software-engineer': 8, 'qa-auditor': 3 }, skills: { 'mermaid-diagrams': 5 } },
+    { id: '77af90cd', ts: '2026-08-18T11:20:00Z', calls: 63, version: '0.17.2',
+      input: 165000, output: 44000, cacheRead: 1300000, cacheCreate: 26000,
+      models: [{ model: 'claude-sonnet-5', cost: 1.85 }],
+      subagents: { 'requirements-engineer': 2 }, skills: {} },
+    { id: 'e41a90bb', ts: '2026-08-14T09:00:00Z', calls: 97, version: '0.18.0',
+      input: 260000, output: 71000, cacheRead: 2000000, cacheCreate: 48000,
+      models: [{ model: 'claude-sonnet-5', cost: 2.10 }, { model: 'claude-opus-5', cost: 1.20 }],
+      subagents: { 'solution-architect': 6 }, skills: { 'mermaid-diagrams': 3 } },
+    { id: 'a205f61e', ts: '2026-08-08T14:30:00Z', calls: 45, version: '0.17.2',
+      input: 118000, output: 30000, cacheRead: 900000, cacheCreate: 18000,
+      models: [{ model: 'claude-sonnet-5', cost: 1.40 }],
+      subagents: { 'software-engineer': 5 }, skills: { 'writer-shared': 3 } },
+    { id: '6d3c2b91', ts: '2026-08-02T10:15:00Z', calls: 30, version: '0.17.2',
+      input: 78000, output: 19000, cacheRead: 560000, cacheCreate: 11000,
+      models: [{ model: 'claude-sonnet-5', cost: 0.95 }, { model: 'claude-haiku-4-5', cost: 0.15 }],
+      subagents: { 'qa-engineer': 3 }, skills: {} },
+    { id: '5f0e8a17', ts: '2026-07-25T08:00:00Z', calls: 51, version: '0.16.0',
+      input: 140000, output: 52000, cacheRead: 800000, cacheCreate: 15000,
+      models: [{ model: 'claude-opus-5', cost: 2.85 }],
+      subagents: { 'documentation-auditor': 4 }, skills: {} },
+    { id: 'c3d9f402', ts: '2026-07-05T12:00:00Z', calls: 40, version: '0.16.0',
+      input: 105000, output: 27000, cacheRead: 620000, cacheCreate: 12000,
+      models: [{ model: 'claude-sonnet-5', cost: 1.10 }],
+      subagents: { 'codebase-auditor': 2 }, skills: {} },
+    { id: '82b1e0c5', ts: '2026-06-20T09:30:00Z', calls: 18, version: '0.15.0',
+      input: 48000, output: 12000, cacheRead: 260000, cacheCreate: 5000,
+      models: [{ model: 'claude-sonnet-5', cost: 0.60 }],
+      subagents: {}, skills: {} }
+  ];
+
+  function sessionCost(s) { return s.models.reduce(function (sum, m) { return sum + m.cost; }, 0); }
+
+  // Period+anchor+timezone window model, adapted from maestro's own
+  // token-usage-report periodWindow(period, anchorDay) — one shared window
+  // every section (stats, chart, rankings, table) reads from, so they can
+  // never drift out of sync with each other. No DST-transition handling —
+  // approximate, same documented tradeoff as this mockup's fixed "now".
+  var NOW = new Date('2026-08-19T08:00:00Z'); // fixed so this mockup renders deterministically
+
+  function ymd(d, tz) {
+    return tz === 'utc' ? [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()] : [d.getFullYear(), d.getMonth(), d.getDate()];
+  }
+  function make(y, m, day, tz) { return tz === 'utc' ? new Date(Date.UTC(y, m, day)) : new Date(y, m, day); }
+  function startOfDay(d, tz) { var p = ymd(d, tz); return make(p[0], p[1], p[2], tz); }
+  function addDays(d, n, tz) { return startOfDay(new Date(d.getTime() + n * 86400000), tz); }
+  function dow(d, tz) { return tz === 'utc' ? d.getUTCDay() : d.getDay(); }
+
+  function periodWindow(period, anchor, tz) {
+    var day = startOfDay(anchor, tz);
+    if (period === 'daily') return { start: day, end: day, granularity: 'hour' };
+    if (period === 'weekly') {
+      var mondayOffset = (dow(day, tz) + 6) % 7;
+      var start = addDays(day, -mondayOffset, tz);
+      return { start: start, end: addDays(start, 6, tz), granularity: 'day' };
+    }
+    if (period === 'monthly') {
+      var p = ymd(day, tz);
+      return { start: make(p[0], p[1], 1, tz), end: make(p[0], p[1] + 1, 0, tz), granularity: 'day' };
+    }
+    if (period === 'yearly') {
+      var y = ymd(day, tz)[0];
+      return { start: make(y, 0, 1, tz), end: make(y, 11, 31, tz), granularity: 'month' };
+    }
+    // ytd
+    var nowDay = startOfDay(NOW, tz);
+    var ny = ymd(nowDay, tz)[0];
+    return { start: make(ny, 0, 1, tz), end: nowDay, granularity: 'day' };
+  }
+
+  function shiftAnchor(period, anchor, dir, tz) {
+    var day = startOfDay(anchor, tz);
+    if (period === 'daily') return addDays(day, dir, tz);
+    if (period === 'weekly') return addDays(day, dir * 7, tz);
+    if (period === 'monthly') { var p = ymd(day, tz); return make(p[0], p[1] + dir, 1, tz); }
+    if (period === 'yearly') { var y = ymd(day, tz)[0]; return make(y + dir, 0, 1, tz); }
+    return day; // ytd: no navigation
+  }
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function bucketKey(ts, granularity, tz) {
+    var d = new Date(ts);
+    var p = ymd(d, tz);
+    var hour = tz === 'utc' ? d.getUTCHours() : d.getHours();
+    if (granularity === 'hour') return p[0] + '-' + pad2(p[1] + 1) + '-' + pad2(p[2]) + 'T' + pad2(hour);
+    if (granularity === 'month') return p[0] + '-' + pad2(p[1] + 1);
+    return p[0] + '-' + pad2(p[1] + 1) + '-' + pad2(p[2]);
+  }
+
+  // Zero-fills the chart to every bucket in the window, not just buckets with
+  // an actual session — otherwise a quiet bucket reads as "no x-axis tick
+  // here" or (worse) collapses the chart to look like the filter didn't
+  // change, instead of an honest $0 bar. Same reasoning as maestro's own
+  // zero-fill in its Cumulative Spend and Tokens & Cost charts.
+  function zeroFillBuckets(win, tz) {
+    var keys = [];
+    if (win.granularity === 'hour') {
+      for (var h = 0; h < 24; h++) keys.push(bucketKey(new Date(win.start.getTime() + h * 3600000).toISOString(), 'hour', tz));
+      return keys;
+    }
+    if (win.granularity === 'month') {
+      var p = ymd(win.start, tz), y = p[0], m = p[1];
+      while (make(y, m, 1, tz) <= win.end) { keys.push(y + '-' + pad2(m + 1)); m += 1; }
+      return keys;
+    }
+    for (var d = win.start; d <= win.end; d = addDays(d, 1, tz)) keys.push(bucketKey(d.toISOString(), 'day', tz));
+    return keys;
+  }
+
+  function sessionsInWindow(sessions, win) {
+    var endExclusive = win.end.getTime() + 86400000;
+    return sessions.filter(function (s) {
+      var t = new Date(s.ts).getTime();
+      return t >= win.start.getTime() && t < endExclusive;
+    });
+  }
+
+  function anchorLabel(period, win) {
+    if (period === 'ytd') return NOW.getUTCFullYear() + ' to date';
+    var opts = period === 'yearly' ? { year: 'numeric' } : period === 'monthly' ? { year: 'numeric', month: 'long' } : { year: 'numeric', month: 'short', day: 'numeric' };
+    if (period === 'weekly') return win.start.toLocaleDateString(undefined, opts) + ' – ' + win.end.toLocaleDateString(undefined, opts);
+    return win.start.toLocaleDateString(undefined, opts);
+  }
+
+  function bucketAxisLabel(key, granularity) {
+    if (granularity === 'hour') return key.slice(-2) + ':00';
+    if (granularity === 'month') return new Date(key + '-01').toLocaleDateString(undefined, { month: 'short' });
+    return key.slice(5); // MM-DD
+  }
+
+  // Usage heatmap: GitHub-style calendar layout, but cells are colored by
+  // usage volume (tokens), not "contributions" — deliberately independent of
+  // the period/anchor filter (always full history, like a profile page),
+  // re-bucketed only on the tz toggle. Rendered above the period toolbar's
+  // filtered content since it's the one static section on this tab. Adapted
+  // from maestro's renderHeatmap().
+  function totalSessionTokens(s) { return s.input + s.output + s.cacheRead + s.cacheCreate; }
+
+  function levelFor(tokens, maxTokens) {
+    if (!tokens) return 0;
+    if (!maxTokens) return 1;
+    var ratio = tokens / maxTokens;
+    if (ratio > 0.75) return 4;
+    if (ratio > 0.5) return 3;
+    if (ratio > 0.25) return 2;
+    return 1;
+  }
+
+  function renderHeatmap(tz) {
+    var container = document.getElementById('usage-heatmap');
+    var monthsRow = document.getElementById('heatmap-months');
+    if (!SESSIONS.length) {
+      container.innerHTML = ''; container.style.display = 'none'; monthsRow.innerHTML = '';
+      var msg = document.getElementById('heatmap-empty-msg');
+      if (!msg) {
+        msg = document.createElement('div');
+        msg.id = 'heatmap-empty-msg'; msg.className = 'empty';
+        container.parentNode.insertBefore(msg, container.nextSibling);
+      }
+      msg.textContent = 'No activity yet.'; msg.style.display = 'block';
+      return;
+    }
+    container.style.display = 'flex';
+    var existingMsg = document.getElementById('heatmap-empty-msg');
+    if (existingMsg) existingMsg.style.display = 'none';
+
+    var byDay = {};
+    SESSIONS.forEach(function (s) {
+      var key = bucketKey(s.ts, 'day', tz);
+      var entry = byDay[key] || { tokens: 0, cost: 0 };
+      entry.tokens += totalSessionTokens(s);
+      entry.cost += sessionCost(s);
+      byDay[key] = entry;
+    });
+    var days = Object.keys(byDay).sort();
+    var firstYear = Number(days[0].slice(0, 4));
+    var start = make(firstYear, 0, 1, tz);
+    var end = startOfDay(new Date(days[days.length - 1]), tz);
+    var startSunday = addDays(start, -dow(start, tz), tz);
+    var maxTokens = Math.max.apply(null, Object.keys(byDay).map(function (k) { return byDay[k].tokens; }).concat([0]));
+
+    var weeksHtml = '', monthsHtml = '', lastMonth = -1;
+    var cursor = startSunday;
+    while (cursor <= end) {
+      var monthNow = tz === 'utc' ? cursor.getUTCMonth() : cursor.getMonth();
+      var showLabel = cursor >= start && monthNow !== lastMonth;
+      monthsHtml += '<div class="heatmap-month-label">' + (showLabel ? cursor.toLocaleString('en-US', { month: 'short', timeZone: tz === 'utc' ? 'UTC' : undefined }) : '') + '</div>';
+      if (cursor >= start) lastMonth = monthNow;
+      weeksHtml += '<div class="heatmap-week">';
+      for (var d = 0; d < 7; d++) {
+        var inRange = cursor >= start && cursor <= end;
+        if (!inRange) {
+          weeksHtml += '<div class="heatmap-cell heatmap-cell-empty"></div>';
+        } else {
+          var key = bucketKey(cursor.toISOString(), 'day', tz);
+          var entry = byDay[key] || { tokens: 0, cost: 0 };
+          var lvl = levelFor(entry.tokens, maxTokens);
+          var cls = 'heatmap-cell' + (lvl ? ' level-' + lvl : '');
+          var title = key + ': ' + fmt(entry.tokens) + ' tokens, ' + usd(entry.cost);
+          weeksHtml += '<div class="' + cls + '" title="' + title + '"></div>';
+        }
+        cursor = addDays(cursor, 1, tz);
+      }
+      weeksHtml += '</div>';
+    }
+    container.innerHTML = weeksHtml;
+    monthsRow.innerHTML = monthsHtml;
+  }
+
+  function rankRowsHtml(rows, valueFmt) {
+    if (!rows.length) return '<div class="empty">No data yet.</div>';
+    var max = Math.max.apply(null, rows.map(function (r) { return r.value; }));
+    return rows.slice(0, 4).map(function (r) {
+      return '<div class="rank-row"><div class="name">' + r.name + '</div>' +
+        '<div class="num tabular">' + valueFmt(r.value) + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + (r.value / max * 100).toFixed(1) + '%"></div></div></div>';
+    }).join('');
+  }
+
+  // Sessions table: sortable (click a header, click again to reverse),
+  // filterable by model/version (scoped to the current period window), and
+  // paginated — adapted from maestro's generic renderTable(). Sort/filter
+  // selections persist across a period/anchor/tz switch (renderUsage() calls
+  // this again with the new windowed sessions); page resets to 0 whenever
+  // the toolbar itself resets it, since the underlying row set changed.
+  var PAGE_SIZE = 5;
+  var SESSION_COLUMNS = [
+    ['id', 'Session'], ['ts', 'Started'], ['models', 'Model(s)'],
+    ['tokens', 'Tokens'], ['calls', 'Calls'], ['cost', 'Cost'], ['version', 'Version']
+  ];
+  var sessionsTableState = { sortKey: 'ts', sortDir: -1, filterModel: 'all', filterVersion: 'all', page: 0 };
+  var lastWindowSessions = [];
+
+  function sessionSortValue(s, key) {
+    if (key === 'id') return s.id;
+    if (key === 'ts') return s.ts;
+    if (key === 'models') return s.models.map(function (m) { return m.model; }).join(',');
+    if (key === 'tokens') return totalSessionTokens(s);
+    if (key === 'calls') return s.calls;
+    if (key === 'cost') return sessionCost(s);
+    return s.version;
+  }
+
+  function renderSessionsTable(sessions, tz) {
+    var st = sessionsTableState;
+    var models = Array.from(new Set(sessions.reduce(function (acc, s) { return acc.concat(s.models.map(function (m) { return m.model; })); }, []))).sort();
+    var versions = Array.from(new Set(sessions.map(function (s) { return s.version; }))).sort();
+
+    var modelSelect = document.getElementById('filter-model');
+    var versionSelect = document.getElementById('filter-version');
+    modelSelect.innerHTML = '<option value="all">All</option>' + models.map(function (m) {
+      return '<option value="' + m + '">' + m + '</option>';
+    }).join('');
+    versionSelect.innerHTML = '<option value="all">All</option>' + versions.map(function (v) {
+      return '<option value="' + v + '">' + v + '</option>';
+    }).join('');
+    modelSelect.value = models.indexOf(st.filterModel) === -1 ? 'all' : st.filterModel;
+    versionSelect.value = versions.indexOf(st.filterVersion) === -1 ? 'all' : st.filterVersion;
+    if (modelSelect.value === 'all') st.filterModel = 'all';
+    if (versionSelect.value === 'all') st.filterVersion = 'all';
+
+    var filtered = sessions.filter(function (s) {
+      var modelOk = st.filterModel === 'all' || s.models.some(function (m) { return m.model === st.filterModel; });
+      var versionOk = st.filterVersion === 'all' || s.version === st.filterVersion;
+      return modelOk && versionOk;
+    });
+
+    var sorted = filtered.slice().sort(function (a, b) {
+      var av = sessionSortValue(a, st.sortKey), bv = sessionSortValue(b, st.sortKey);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * st.sortDir;
+      return String(av).localeCompare(String(bv)) * st.sortDir;
+    });
+
+    var head = document.getElementById('sessions-head');
+    head.innerHTML = SESSION_COLUMNS.map(function (col) {
+      var key = col[0], label = col[1];
+      var arrow = st.sortKey === key ? (st.sortDir === 1 ? ' ▲' : ' ▼') : '';
+      var numClass = (key === 'tokens' || key === 'calls' || key === 'cost') ? ' class="num"' : '';
+      return '<th' + numClass + '><button type="button" data-key="' + key + '">' + label + arrow + '</button></th>';
+    }).join('');
+    head.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.key;
+        if (st.sortKey === key) st.sortDir = -st.sortDir; else { st.sortKey = key; st.sortDir = 1; }
+        st.page = 0;
+        renderSessionsTable(lastWindowSessions, tz);
+      });
+    });
+
+    var body = document.getElementById('sessions-body');
+    var emptyMsg = document.getElementById('sessions-empty');
+    var pag = document.getElementById('sessions-pagination');
+    if (!sorted.length) {
+      body.innerHTML = '';
+      emptyMsg.textContent = sessions.length ? 'No sessions match this filter.' : 'No sessions in this window.';
+      emptyMsg.style.display = 'block';
+      pag.style.display = 'none';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    var totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+    if (st.page >= totalPages) st.page = totalPages - 1;
+    var pageRows = sorted.slice(st.page * PAGE_SIZE, st.page * PAGE_SIZE + PAGE_SIZE);
+
+    body.innerHTML = pageRows.map(function (s) {
+      var started = new Date(s.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: tz === 'utc' ? 'UTC' : undefined });
+      var modelsStr = s.models.map(function (m) { return m.model; }).join(', ');
+      var tokens = totalSessionTokens(s);
+      var title = 'Input: ' + fmt(s.input) + ' · Output: ' + fmt(s.output) + ' · Cache write: ' + fmt(s.cacheCreate) + ' · Cache read: ' + fmt(s.cacheRead);
+      return '<tr><td class="mono">' + s.id + '</td><td>' + started + '</td><td>' + modelsStr + '</td>' +
+        '<td class="num tabular" data-tooltip="' + title + '">' + fmt(tokens) + '</td>' +
+        '<td class="num tabular">' + fmt(s.calls) + '</td><td class="num tabular">' + usd(sessionCost(s)) + '</td>' +
+        '<td>' + s.version + '</td></tr>';
+    }).join('');
+
+    if (sorted.length > PAGE_SIZE) {
+      pag.style.display = 'flex';
+      document.getElementById('sessions-page-info').textContent = 'Page ' + (st.page + 1) + ' of ' + totalPages + ' (' + sorted.length + ' rows)';
+      document.getElementById('sessions-prev').disabled = st.page === 0;
+      document.getElementById('sessions-next').disabled = st.page >= totalPages - 1;
+    } else {
+      pag.style.display = 'none';
+    }
+  }
+
+  document.getElementById('filter-model').addEventListener('change', function (e) {
+    sessionsTableState.filterModel = e.target.value;
+    sessionsTableState.page = 0;
+    renderSessionsTable(lastWindowSessions, usageState.tz);
+  });
+  document.getElementById('filter-version').addEventListener('change', function (e) {
+    sessionsTableState.filterVersion = e.target.value;
+    sessionsTableState.page = 0;
+    renderSessionsTable(lastWindowSessions, usageState.tz);
+  });
+  document.getElementById('sessions-prev').addEventListener('click', function () {
+    sessionsTableState.page -= 1;
+    renderSessionsTable(lastWindowSessions, usageState.tz);
+  });
+  document.getElementById('sessions-next').addEventListener('click', function () {
+    sessionsTableState.page += 1;
+    renderSessionsTable(lastWindowSessions, usageState.tz);
+  });
+
+  // Ranking panels always aggregate over the windowed sessions — matching
+  // the stat grid and the chart below, neither of which has a scope toggle.
+  function aggregateRankings(list) {
+    var byModel = {}, byVersion = {}, bySubagent = {}, bySkill = {};
+    list.forEach(function (s) {
+      var cost = sessionCost(s);
+      s.models.forEach(function (m) { byModel[m.model] = (byModel[m.model] || 0) + m.cost; });
+      byVersion[s.version] = (byVersion[s.version] || 0) + cost;
+      Object.keys(s.subagents).forEach(function (k) { bySubagent[k] = (bySubagent[k] || 0) + s.subagents[k]; });
+      Object.keys(s.skills).forEach(function (k) { bySkill[k] = (bySkill[k] || 0) + s.skills[k]; });
+    });
+    return { byModel: byModel, byVersion: byVersion, bySubagent: bySubagent, bySkill: bySkill };
+  }
+
+  var usageState = { period: 'daily', anchor: NOW, tz: 'local' };
+
+  function renderUsage() {
+    var period = usageState.period, tz = usageState.tz;
+    var win = periodWindow(period, usageState.anchor, tz);
+    var sessions = sessionsInWindow(SESSIONS, win);
+
+    renderHeatmap(tz); // static (full history) — unaffected by period/anchor, only re-buckets on tz
+
+    document.getElementById('anchor-nav').style.display = period === 'ytd' ? 'none' : 'flex';
+    document.getElementById('anchor-label').textContent = anchorLabel(period, win);
+    var earliest = SESSIONS.reduce(function (min, s) { return s.ts < min ? s.ts : min; }, SESSIONS[0].ts);
+    var prevDisabled = period === 'ytd' || win.start <= startOfDay(new Date(earliest), tz);
+    var nextDisabled = period === 'ytd' || win.end >= startOfDay(NOW, tz);
+    document.getElementById('anchor-prev').disabled = prevDisabled;
+    document.getElementById('anchor-next').disabled = nextDisabled;
+
+    var totalCost = 0, totalIn = 0, totalOut = 0, totalCacheR = 0, totalCacheC = 0, totalCalls = 0;
+    sessions.forEach(function (s) {
+      var cost = sessionCost(s);
+      totalCost += cost; totalIn += s.input; totalOut += s.output;
+      totalCacheR += s.cacheRead; totalCacheC += s.cacheCreate; totalCalls += s.calls;
+    });
+    var rankings = aggregateRankings(sessions);
+
+    var byBucket = {};
+    sessions.forEach(function (s) {
+      var key = bucketKey(s.ts, win.granularity, tz);
+      byBucket[key] = (byBucket[key] || 0) + sessionCost(s);
+    });
+    var totalTokens = totalIn + totalOut + totalCacheR + totalCacheC;
+    var cacheHit = (totalCacheR + totalIn) > 0 ? (totalCacheR / (totalCacheR + totalIn) * 100) : 0;
+
+    document.getElementById('stat-cost').textContent = usd(totalCost);
+    document.getElementById('stat-tokens').textContent = fmt(totalTokens);
+    document.getElementById('stat-calls').textContent = fmt(totalCalls);
+    document.getElementById('stat-sessions').textContent = fmt(sessions.length);
+    document.getElementById('stat-cachehit').textContent = cacheHit.toFixed(1) + '%';
+
+    function toRows(obj) { return Object.keys(obj).map(function (k) { return { name: k, value: obj[k] }; }).sort(function (a, b) { return b.value - a.value; }); }
+    document.getElementById('by-model').innerHTML = rankRowsHtml(toRows(rankings.byModel), usd);
+    document.getElementById('by-version').innerHTML = rankRowsHtml(toRows(rankings.byVersion), usd);
+    document.getElementById('by-subagent').innerHTML = rankRowsHtml(toRows(rankings.bySubagent), fmt);
+    document.getElementById('by-skill').innerHTML = rankRowsHtml(toRows(rankings.bySkill), fmt);
+
+    var svg = document.getElementById('usage-chart');
+    var barsG = svg.querySelector('.bars'), labelsG = svg.querySelector('.labels');
+    barsG.innerHTML = ''; labelsG.innerHTML = '';
+    var buckets = zeroFillBuckets(win, tz);
+    if (buckets.length) {
+      var max = Math.max.apply(null, buckets.map(function (b) { return byBucket[b] || 0; }).concat([0.01]));
+      var w = 700, h = 130, gap = Math.max(4, 10 - buckets.length);
+      var barW = Math.max(3, (w / buckets.length) - gap);
+      buckets.forEach(function (b, i) {
+        var bucketCost = byBucket[b] || 0;
+        var barH = (bucketCost / max) * h;
+        var x = i * (barW + gap);
+        var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('class', 'bar');
+        rect.setAttribute('x', x); rect.setAttribute('y', h - barH);
+        rect.setAttribute('width', barW); rect.setAttribute('height', Math.max(1, barH));
+        rect.setAttribute('rx', 3);
+        var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        title.textContent = b + ': ' + usd(bucketCost);
+        rect.appendChild(title);
+        barsG.appendChild(rect);
+        var labelEvery = Math.max(1, Math.ceil(buckets.length / 8));
+        if (i % labelEvery === 0) {
+          var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('class', 'axis');
+          text.setAttribute('x', x + barW / 2); text.setAttribute('y', h + 16);
+          text.setAttribute('text-anchor', 'middle');
+          text.textContent = bucketAxisLabel(b, win.granularity);
+          labelsG.appendChild(text);
+        }
+      });
+    }
+
+    lastWindowSessions = sessions;
+    renderSessionsTable(sessions, tz);
+  }
+
+  function setTab(view, sub, pushHash) {
+    document.querySelectorAll('.tab').forEach(function (t) { t.setAttribute('aria-selected', t.dataset.view === view ? 'true' : 'false'); });
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+    document.getElementById('view-' + view).classList.add('active');
+    document.getElementById('toolbar-usage').style.display = view === 'usage' ? 'flex' : 'none';
+    document.getElementById('toolbar-tracker').style.display = view === 'tracker' ? 'flex' : 'none';
+    document.getElementById('toolbar-swarms').style.display = view === 'swarms' ? 'flex' : 'none';
+    if (view === 'tracker') {
+      var isBoard = sub !== 'road';
+      document.querySelectorAll('#toolbar-tracker .segmented button').forEach(function (b) { b.setAttribute('aria-selected', (b.dataset.sub === 'board') === isBoard ? 'true' : 'false'); });
+      document.getElementById('board').style.display = isBoard ? 'flex' : 'none';
+      document.getElementById('road').style.display = isBoard ? 'none' : 'flex';
+    }
+    if (pushHash) location.hash = (view === 'tracker' && sub === 'road') ? 'tracker/road' : view;
+  }
+
+  function tabFromHash() {
+    var parts = location.hash.replace('#', '').split('/');
+    var view = (parts[0] === 'tracker' || parts[0] === 'swarms') ? parts[0] : 'usage';
+    return [view, parts[1]];
+  }
+
+  document.querySelectorAll('.tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var sub = document.querySelector('#toolbar-tracker .segmented button[aria-selected="true"]');
+      setTab(tab.dataset.view, sub && sub.dataset.sub, true);
+    });
+  });
+
+  window.addEventListener('hashchange', function () { setTab.apply(null, tabFromHash().concat([false])); });
+
+  document.querySelectorAll('#period-group button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#period-group button').forEach(function (b) { b.setAttribute('aria-selected', 'false'); });
+      btn.setAttribute('aria-selected', 'true');
+      usageState.period = btn.dataset.period;
+      usageState.anchor = NOW;
+      renderUsage();
+    });
+  });
+  document.querySelectorAll('#tz-group button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#tz-group button').forEach(function (b) { b.setAttribute('aria-selected', 'false'); });
+      btn.setAttribute('aria-selected', 'true');
+      usageState.tz = btn.dataset.tz;
+      renderUsage();
+    });
+  });
+  // "Local" alone doesn't say which timezone that is — label it with the
+  // browser's resolved IANA zone so it's unambiguous at a glance.
+  document.getElementById('tz-local-btn').textContent = 'Local (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
+
+  document.getElementById('anchor-prev').addEventListener('click', function () {
+    usageState.anchor = shiftAnchor(usageState.period, usageState.anchor, -1, usageState.tz);
+    renderUsage();
+  });
+  document.getElementById('anchor-next').addEventListener('click', function () {
+    usageState.anchor = shiftAnchor(usageState.period, usageState.anchor, 1, usageState.tz);
+    renderUsage();
+  });
+  document.getElementById('anchor-latest').addEventListener('click', function () {
+    usageState.anchor = NOW;
+    renderUsage();
+  });
+
+  renderUsage();
+
+  document.querySelectorAll('#toolbar-tracker .segmented button').forEach(function (btn) {
+    btn.addEventListener('click', function () { setTab('tracker', btn.dataset.sub, true); });
+  });
+
+  setTab.apply(null, tabFromHash().concat([false]));
+
+  // Swarms: list + detail
+  var CHAIN_PHASES = ['PLAN', 'DOC-GATE', 'QA-RED', 'IMPLEMENT', 'QA-AUDIT', 'DOC-POST-IMPL', 'PUBLISH'];
+  var SWARMS = [
+    {
+      slug: '2026-08-19-dashboard-react-redesign',
+      phase: 'HANDOFF NEEDED',
+      status: 'waiting on a decision',
+      branch: 'feature/dashboard-react-redesign',
+      worktree: '.claude/worktrees/dashboard-react',
+      tmux: 'alive',
+      lastActivity: '4m ago',
+      recencyMinutes: 4,
+      recentHistory: [
+        { phase: 'QA-RED', note: 'feasibility check flagged an ambiguity', time: '4m ago' },
+        { phase: 'DOC-GATE', note: 'doc gate clean, no findings', time: '22m ago' },
+        { phase: 'PLAN', note: 'plan read, worktree created', time: '31m ago' },
+      ],
+      paneTail: 'qa-engineer: feasibility check flagged an ambiguity in\n' +
+        'FR-007 (period/anchor scope). Waiting on a decision — proceed\n' +
+        'with client-side recompute as specced, or reopen the FR?\n\n' +
+        'Phase: QA-RED → HANDOFF NEEDED\n' +
+        'Awaiting: human decision on scope ambiguity',
+    },
+    {
+      slug: '2026-08-17-notes-local-file',
+      phase: 'IMPLEMENT',
+      status: 'working',
+      branch: 'feature/notes-local-file',
+      worktree: '.claude/worktrees/notes-local',
+      tmux: 'alive',
+      lastActivity: '41m ago',
+      recencyMinutes: 41,
+      recentHistory: [
+        { phase: 'IMPLEMENT', note: 'writing .harness/notes.local.md handling', time: '41m ago' },
+        { phase: 'QA-RED', note: 'tests written, 4 failing as expected', time: '1h ago' },
+        { phase: 'DOC-GATE', note: 'doc gate clean, no findings', time: '1h ago' },
+        { phase: 'PLAN', note: 'plan read, worktree created', time: '1h ago' },
+      ],
+      paneTail: null,
+    },
+    {
+      slug: '2026-08-16-cli-export',
+      phase: 'IMPLEMENT',
+      status: 'STALLED (2026-08-16T14:20:00Z) — no progress',
+      branch: 'feature/cli-export',
+      worktree: '.claude/worktrees/cli-export',
+      tmux: 'dead',
+      lastActivity: '3h ago',
+      recencyMinutes: 180,
+      recentHistory: [
+        { phase: 'IMPLEMENT', note: 'no further HISTORY.md progress', time: '3h ago' },
+        { phase: 'QA-RED', note: 'tests written, 2 failing as expected', time: '3h ago' },
+        { phase: 'PLAN', note: 'plan read, worktree created', time: '4h ago' },
+      ],
+      paneTail: null,
+    },
+    {
+      slug: '2026-08-15-swarms-tab-backend',
+      phase: 'PUBLISH',
+      status: 'done',
+      branch: 'feature/swarms-tab-backend',
+      worktree: '.claude/worktrees/swarms-backend',
+      tmux: 'alive',
+      lastActivity: '1d ago',
+      recencyMinutes: 1440,
+      recentHistory: [
+        { phase: 'PUBLISH', note: 'PR #12 opened, ticket moved to In Review', time: '1d ago' },
+        { phase: 'DOC-POST-IMPL', note: 'doc post-impl clean, no findings', time: '1d ago' },
+        { phase: 'QA-AUDIT', note: 'clean pass, no findings', time: '1d ago' },
+        { phase: 'IMPLEMENT', note: 'discover_swarms + /api/swarms implemented', time: '1d ago' },
+        { phase: 'QA-RED', note: 'tests written, 6 failing as expected', time: '1d ago' },
+      ],
+      paneTail: null,
+    },
+    {
+      slug: '2026-08-14-harness-doctor-check',
+      phase: 'PLAN',
+      status: 'starting',
+      branch: 'feature/harness-doctor-check',
+      worktree: '.worktrees/harness-doctor-check',
+      tmux: 'unknown',
+      lastActivity: '2m ago',
+      recencyMinutes: 2,
+      recentHistory: [
+        { phase: 'PLAN', note: 'plan read, worktree created', time: '2m ago' },
+      ],
+      paneTail: null,
+    },
+  ];
+  var selectedSwarm = null;
+  var sortMode = 'priority';
+
+  function priorityRank(s) {
+    if (s.phase === 'HANDOFF NEEDED') return 0;
+    if (isStalled(s.status)) return 1;
+    if (s.phase === 'PUBLISH') return 3;
+    return 2;
+  }
+
+  function sortedSwarms() {
+    var copy = SWARMS.slice();
+    if (sortMode === 'name') return copy; // already slug-ordered
+    if (sortMode === 'recent') {
+      // recencyMinutes is mock-only data standing in for HISTORY.md's last real
+      // timestamp — the real backend would sort by that timestamp directly.
+      return copy.sort(function (a, b) { return a.recencyMinutes - b.recencyMinutes; });
+    }
+    return copy.sort(function (a, b) { return priorityRank(a) - priorityRank(b); });
+  }
+
+  function isStalled(status) { return status.indexOf('STALLED (') === 0; }
+
+  function phaseLabel(phase) {
+    if (phase === 'HANDOFF NEEDED') return { text: 'Handoff Needed', cls: 'phase-pill handoff' };
+    if (phase === 'PUBLISH') return { text: 'Done', cls: 'phase-pill done' };
+    return { text: 'Running', cls: 'phase-pill running' };
+  }
+
+  // Current phase isn't always in CHAIN_PHASES (HANDOFF NEEDED is a pause state,
+  // not a chain step) — fall back to the most recent chain-phase entry in history.
+  function pipelinePosition(s) {
+    var direct = CHAIN_PHASES.indexOf(s.phase);
+    if (direct !== -1) return direct;
+    for (var i = 0; i < s.recentHistory.length; i++) {
+      var idx = CHAIN_PHASES.indexOf(s.recentHistory[i].phase);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }
+
+  // "Running" = actively executing right now, not paused/stalled/finished —
+  // this is the only state that earns the pulse animation.
+  function isRunning(s) {
+    return !isStalled(s.status) && s.phase !== 'PUBLISH' && s.phase !== 'HANDOFF NEEDED';
+  }
+
+  function renderMiniProgress(s) {
+    var pos = pipelinePosition(s);
+    var running = isRunning(s);
+    return '<div class="mini-progress">' + CHAIN_PHASES.map(function (_, i) {
+      if (pos === -1 || i > pos) return '<span class="seg"></span>';
+      var cls = 'seg filled' + (i === pos && running ? ' pulse' : '');
+      return '<span class="' + cls + '"></span>';
+    }).join('') + '</div>';
+  }
+
+  // Uses the same pipelinePosition() as the list's mini-progress bar, so list
+  // and detail always agree on where a swarm actually sits — including
+  // HANDOFF NEEDED, which isn't itself a chain step (falls back to history).
+  function renderTimeline(s) {
+    var currentIndex = pipelinePosition(s);
+    var atLabel = s.phase === 'HANDOFF NEEDED' ? 'paused' : 'current';
+    var running = isRunning(s);
+    return CHAIN_PHASES.map(function (p, i) {
+      var cls = i === currentIndex ? 'step ' + atLabel + (running ? ' pulse' : '') : (i <= currentIndex ? 'step done' : 'step');
+      var label = (i === currentIndex && atLabel === 'paused') ? p + ' ⏸' : p;
+      var arrow = i < CHAIN_PHASES.length - 1 ? '<span class="arrow">→</span>' : '';
+      return '<span class="' + cls + '">' + label + '</span>' + arrow;
+    }).join('');
+  }
+
+  function renderSwarmList() {
+    document.getElementById('swarm-list').innerHTML = sortedSwarms().map(function (s) {
+      var pill = isStalled(s.status) ? { text: 'Stalled', cls: 'phase-pill stalled' } : phaseLabel(s.phase);
+      if (isRunning(s)) pill.cls += ' pulse';
+      var dotCls = s.tmux === 'alive' ? 'dot alive' : (s.tmux === 'dead' ? 'dot dead' : 'dot unknown');
+      var selCls = s.slug === selectedSwarm ? ' selected' : '';
+      return '<div class="swarm-list-item' + selCls + '" data-slug="' + s.slug + '">' +
+        '<div class="row1"><span class="slug">' + s.slug + '</span><span class="' + pill.cls + '">' + pill.text + '</span></div>' +
+        '<div class="row2"><span class="' + dotCls + '"></span>tmux ' + s.tmux + '<span>·</span>' + s.lastActivity + '</div>' +
+        renderMiniProgress(s) +
+        '</div>';
+    }).join('');
+    document.querySelectorAll('.swarm-list-item').forEach(function (el) {
+      el.addEventListener('click', function () {
+        selectedSwarm = el.dataset.slug;
+        renderSwarmList();
+        renderSwarmDetail();
+      });
+    });
+  }
+
+  function renderSwarmDetail() {
+    var s = SWARMS.filter(function (x) { return x.slug === selectedSwarm; })[0];
+    var el = document.getElementById('swarm-detail');
+    if (!s) { el.innerHTML = '<div class="detail-empty">Select a swarm to see details.</div>'; return; }
+
+    var pill = isStalled(s.status) ? { text: 'Stalled', cls: 'phase-pill stalled' } : phaseLabel(s.phase);
+    var statusLine = isStalled(s.status)
+      ? '<span class="badge stalled">' + s.status + '</span>'
+      : (s.phase !== 'HANDOFF NEEDED' && s.phase !== 'PUBLISH' ? '<span class="hint">No progress in ' + s.lastActivity.replace(' ago', '') + '</span>' : '<span class="hint">' + (s.phase === 'PUBLISH' ? 'Published' : 'Waiting on a decision') + '</span>');
+    var historyHtml = s.recentHistory.map(function (h) {
+      return '<li><span class="hphase">' + h.phase + '</span>' +
+        '<span class="hnote" title="' + h.note.replace(/"/g, '&quot;') + '">' + h.note + '</span>' +
+        '<span class="htime" title="' + h.time + '">' + h.time + '</span></li>';
+    }).join('');
+    var historyBlock = '<div class="detail-section">' +
+      '<div class="detail-subhead">Recent history</div>' +
+      '<ul class="history-log">' + historyHtml + '</ul>' +
+      '</div>';
+    var paneTailBlock = (s.phase === 'HANDOFF NEEDED' && s.paneTail)
+      ? '<div class="detail-section"><div class="detail-subhead">Pane tail</div><div class="pane-tail">' + s.paneTail + '</div></div>'
+      : '';
+    // HANDOFF NEEDED: pane tail is the densest "what am I being asked to decide"
+    // content, so it leads — no scrolling past history to reach it.
+    var bodyBlocks = s.phase === 'HANDOFF NEEDED' ? (paneTailBlock + historyBlock) : (historyBlock + paneTailBlock);
+
+    el.innerHTML = '<div class="detail-card">' +
+      '<div class="detail-head">' +
+      '<div class="detail-head-left"><div class="detail-slug">' + s.slug + '</div><span class="' + pill.cls + '">' + pill.text + '</span></div>' +
+      '<button class="detail-close" id="detail-close-btn" aria-label="Close detail panel">&times;</button>' +
+      '</div>' +
+      '<div class="detail-section">' +
+      '<div class="detail-subhead">Progress</div>' +
+      '<div class="timeline">' + renderTimeline(s) + '</div>' +
+      '</div>' +
+      '<div class="detail-section">' +
+      '<div class="status-row">' + statusLine + '<span class="elapsed">' + s.lastActivity + '</span></div>' +
+      '<div class="detail-meta">' +
+      '<span><span class="k">Branch</span><span class="mono">' + s.branch + '</span></span>' +
+      '<span><span class="k">Worktree</span><span class="mono">' + s.worktree + '</span></span>' +
+      '</div>' +
+      '</div>' +
+      bodyBlocks +
+      '</div>';
+    document.getElementById('detail-close-btn').addEventListener('click', function () {
+      selectedSwarm = null;
+      renderSwarmList();
+      renderSwarmDetail();
+    });
+  }
+
+  document.querySelectorAll('#toolbar-swarms .segmented button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      sortMode = btn.dataset.sort;
+      document.querySelectorAll('#toolbar-swarms .segmented button').forEach(function (b) { b.setAttribute('aria-selected', b === btn ? 'true' : 'false'); });
+      renderSwarmList();
+    });
+  });
+
+  renderSwarmList();
+  renderSwarmDetail();
+</script>
+</body>
+</html>

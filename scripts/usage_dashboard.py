@@ -11,9 +11,11 @@ hooks/scripts/log-version.sh on SessionStart) instead, joined in by
 session id.
 
 stdlib only, no dependencies. Serves:
-  GET /             the dashboard page (polls /api/usage and /api/tracker)
+  GET /*            dashboard/dist/ static files (the React SPA), SPA fallback to
+                    index.html for unknown paths, 500 if dashboard/dist/ is missing
   GET /api/usage    current usage aggregation, as JSON
   GET /api/tracker  docs/.tasks/TRACKER.md rows, as JSON (empty list if absent)
+  GET /api/swarms   Mode: Unattended tasks under docs/.tasks/*/STATE.md, as JSON
 """
 
 import http.server

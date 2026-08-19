@@ -119,7 +119,7 @@ git commit -m "feat: add parse_state_md for generic STATE.md parsing"
 
 **Interfaces:**
 - Consumes: `parse_state_md(path) -> dict` (Task 1), `parse_history_md(path) -> list` (existing).
-- Produces: `discover_swarms(cwd: str) -> list[dict]` — one dict per `Mode: Unattended` task folder under `docs/.tasks/*/STATE.md`, each with keys: `slug` (str, folder name), `phase`, `status`, `handoff_to`, `worktree`, `branch`, `key_info` (all from `STATE.md`, `""` if absent), `last_history` (dict `{"timestamp", "phase", "note"}` or `None` if `HISTORY.md` has no timestamped lines), `history_count` (int), `tmux_alive` (`True`/`False`/`None` — `None` means `tmux` binary is unavailable).
+- Produces: `discover_swarms(cwd: str) -> list[dict]` — one dict per `Mode: Unattended` task folder under `docs/.tasks/*/STATE.md`, each with keys: `slug` (str, folder name), `phase`, `status`, `handoff_to`, `worktree`, `branch`, `key_info` (all from `STATE.md`, `""` if absent), `last_history` (dict `{"timestamp", "phase", "note"}` or `None` if `HISTORY.md` has no timestamped lines), `recent_history` (list of up to 5 such dicts, newest first — feeds the Swarms detail panel's history log), `history_count` (int), `tmux_alive` (`True`/`False`/`None` — `None` means `tmux` binary is unavailable).
 - Tasks whose `STATE.md` has no `mode` key, or `mode` isn't exactly `"Unattended"`, are excluded.
 
 - [ ] **Step 1: Write the failing tests**
@@ -151,6 +151,25 @@ def test_discover_swarms_finds_unattended_tasks_only(tmp_path, monkeypatch):
     assert swarm["history_count"] == 2
     assert swarm["last_history"]["phase"] == "IMPLEMENT"
     assert swarm["tmux_alive"] is True
+    assert [h["phase"] for h in swarm["recent_history"]] == ["IMPLEMENT", "PLAN"]
+
+
+def test_discover_swarms_recent_history_caps_at_5_newest_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(usage_dashboard, "_tmux_has_session", lambda branch: True)
+    cwd = tmp_path / "myproject"
+    task = cwd / "docs" / ".tasks" / "2026-08-19-my-slug"
+    task.mkdir(parents=True)
+    (task / "STATE.md").write_text("Mode: Unattended\nPhase: PUBLISH\nBranch: feature/x\n")
+    lines = [
+        f"2026-08-19T{10 + i:02d}:00:00Z — PHASE{i} — note {i}" for i in range(7)
+    ]
+    (task / "HISTORY.md").write_text("\n".join(lines) + "\n")
+
+    swarms = usage_dashboard.discover_swarms(str(cwd))
+    recent = swarms[0]["recent_history"]
+    assert len(recent) == 5
+    assert recent[0]["phase"] == "PHASE6"
+    assert recent[-1]["phase"] == "PHASE2"
 
 
 def test_discover_swarms_no_tasks_dir_returns_empty(tmp_path):
@@ -209,6 +228,7 @@ def discover_swarms(cwd: str) -> list:
             "branch": branch,
             "key_info": state.get("key_info", ""),
             "last_history": history[-1] if history else None,
+            "recent_history": list(reversed(history[-5:])),
             "history_count": len(history),
             "tmux_alive": _tmux_has_session(branch) if branch else None,
         })
@@ -313,6 +333,7 @@ In `discover_swarms`, change the `tmux_alive` line and the dict construction to:
             "branch": branch,
             "key_info": state.get("key_info", ""),
             "last_history": history[-1] if history else None,
+            "recent_history": list(reversed(history[-5:])),
             "history_count": len(history),
             "tmux_alive": tmux_alive,
             "pane_tail": pane_tail,
@@ -758,6 +779,12 @@ export interface TrackerRow {
   [key: string]: string
 }
 
+export interface HistoryEntry {
+  timestamp: string
+  phase: string
+  note: string
+}
+
 export interface Swarm {
   slug: string
   phase: string
@@ -766,11 +793,14 @@ export interface Swarm {
   worktree: string
   branch: string
   key_info: string
-  last_history: { timestamp: string; phase: string; note: string } | null
+  last_history: HistoryEntry | null
+  recent_history: HistoryEntry[]
   history_count: number
   tmux_alive: boolean | null
   pane_tail: string[] | null
 }
+
+export const CHAIN_PHASES = ['PLAN', 'DOC-GATE', 'QA-RED', 'IMPLEMENT', 'QA-AUDIT', 'DOC-POST-IMPL', 'PUBLISH']
 
 export async function fetchUsage(): Promise<UsageData> {
   const res = await fetch('/api/usage')
@@ -1287,8 +1317,8 @@ git commit -m "chore: bump dashboard submodule pointer — Tracker tab"
 - Create: `dashboard/dist/` (build output, committed)
 
 **Interfaces:**
-- Consumes: `fetchSwarms()`, `Swarm` (Task 7's `src/api.ts`).
-- Produces: `<SwarmsTab />` — the last piece; after this task the app is feature-complete per US-001–US-004.
+- Consumes: `fetchSwarms()`, `Swarm`, `HistoryEntry`, `CHAIN_PHASES` (Task 7's `src/api.ts`).
+- Produces: `<SwarmsTab />` — the last piece; after this task the app is feature-complete per US-001–US-004. List + detail split per `ui-layout-spec.md`'s Swarms layout (REG-3 list pane, REG-4 detail pane).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1308,6 +1338,10 @@ const handoffSwarm: Swarm = {
   branch: 'feature/my-slug',
   key_info: 'needs a human answer',
   last_history: { timestamp: '2026-08-19T10:00:00Z', phase: 'QA-RED', note: 'tests written' },
+  recent_history: [
+    { timestamp: '2026-08-19T10:00:00Z', phase: 'QA-RED', note: 'tests written' },
+    { timestamp: '2026-08-19T09:30:00Z', phase: 'DOC-GATE', note: 'doc gate clean' },
+  ],
   history_count: 3,
   tmux_alive: true,
   pane_tail: ['waiting for input...'],
@@ -1322,22 +1356,36 @@ const stalledSwarm: Swarm = {
 }
 
 describe('SwarmsTab', () => {
-  it('lists swarms with branch/worktree/liveness', async () => {
+  it('lists swarms in the left list without showing detail until selected', async () => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ json: () => Promise.resolve([handoffSwarm]) } as Response)
     ))
     render(<SwarmsTab />)
     await waitFor(() => expect(screen.getByText('2026-08-19-my-slug')).toBeInTheDocument())
-    expect(screen.getByText('feature/my-slug')).toBeInTheDocument()
-    expect(screen.getByText('/tmp/wt')).toBeInTheDocument()
+    expect(screen.getByText(/select a swarm/i)).toBeInTheDocument()
+    expect(screen.queryByText('feature/my-slug')).not.toBeInTheDocument()
   })
 
-  it('shows the pane tail only when HANDOFF NEEDED', async () => {
+  it('opens the detail panel on click, showing branch/worktree/timeline/history', async () => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ json: () => Promise.resolve([handoffSwarm]) } as Response)
     ))
     render(<SwarmsTab />)
-    await waitFor(() => expect(screen.getByText('waiting for input...')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2026-08-19-my-slug')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('2026-08-19-my-slug'))
+    expect(screen.getByText('feature/my-slug')).toBeInTheDocument()
+    expect(screen.getByText('/tmp/wt')).toBeInTheDocument()
+    expect(screen.getByText('DOC-GATE')).toBeInTheDocument()
+  })
+
+  it('shows the pane tail only when the selected swarm is HANDOFF NEEDED', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve([handoffSwarm]) } as Response)
+    ))
+    render(<SwarmsTab />)
+    await waitFor(() => expect(screen.getByText('2026-08-19-my-slug')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('2026-08-19-my-slug'))
+    expect(screen.getByText('waiting for input...')).toBeInTheDocument()
   })
 
   it('shows the authoritative stalled badge only from STATE.md\'s own marker', async () => {
@@ -1345,7 +1393,9 @@ describe('SwarmsTab', () => {
       Promise.resolve({ json: () => Promise.resolve([stalledSwarm]) } as Response)
     ))
     render(<SwarmsTab />)
-    await waitFor(() => expect(screen.getByText(/STALLED/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2026-08-19-other-slug')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('2026-08-19-other-slug'))
+    expect(screen.getByText(/STALLED/)).toBeInTheDocument()
   })
 
   it('shows an empty state with no swarms', async () => {
@@ -1368,14 +1418,44 @@ Expected: FAIL — placeholder component has none of this markup.
 ```typescript
 // dashboard/src/components/SwarmsTab.tsx
 import { useEffect, useState } from 'react'
-import { fetchSwarms, type Swarm } from '../api'
+import { fetchSwarms, CHAIN_PHASES, type Swarm } from '../api'
 
 function isStalled(status: string): boolean {
   return status.startsWith('STALLED (')
 }
 
+function elapsedLabel(timestamp: string | undefined): string {
+  if (!timestamp) return 'no activity yet'
+  const ms = Date.now() - new Date(timestamp).getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  return `${hours}h ago`
+}
+
+function PhaseTimeline({ phase }: { phase: string }) {
+  const currentIndex = CHAIN_PHASES.indexOf(phase)
+  return (
+    <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+      {CHAIN_PHASES.map((p, i) => (
+        <span
+          key={p}
+          style={{
+            fontWeight: i === currentIndex ? 700 : 400,
+            opacity: currentIndex === -1 || i <= currentIndex ? 1 : 0.4,
+          }}
+        >
+          {p}
+          {i < CHAIN_PHASES.length - 1 ? ' → ' : ''}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function SwarmsTab() {
   const [swarms, setSwarms] = useState<Swarm[] | null>(null)
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1396,29 +1476,59 @@ export default function SwarmsTab() {
     return <div className="empty">No unattended swarms running.</div>
   }
 
+  const selected = swarms.find((s) => s.slug === selectedSlug) ?? null
+
   return (
-    <div>
-      {swarms.map((s) => (
-        <div key={s.slug} style={{ border: '1px solid #ddd', borderRadius: 8, padding: '.75rem', marginBottom: '.75rem' }}>
-          <div><strong>{s.slug}</strong> — {s.phase}</div>
-          <div>Branch: {s.branch}</div>
-          <div>Worktree: {s.worktree}</div>
-          <div>
-            tmux:{' '}
-            {s.tmux_alive === true ? 'alive' : s.tmux_alive === false ? 'dead' : 'unknown'}
+    <div style={{ display: 'flex', gap: '1rem' }}>
+      <div style={{ flex: '0 0 40%' }}>
+        {swarms.map((s) => (
+          <div
+            key={s.slug}
+            onClick={() => setSelectedSlug(s.slug)}
+            style={{
+              border: '1px solid #ddd', borderRadius: 8, padding: '.6rem .75rem',
+              marginBottom: '.5rem', cursor: 'pointer',
+              background: s.slug === selectedSlug ? '#f0f0f0' : undefined,
+            }}
+          >
+            <div><strong>{s.slug}</strong> — {s.phase}</div>
+            <div>
+              tmux: {s.tmux_alive === true ? 'alive' : s.tmux_alive === false ? 'dead' : 'unknown'}
+              {' · '}
+              {elapsedLabel(s.last_history?.timestamp)}
+            </div>
           </div>
-          {isStalled(s.status) ? (
-            <div style={{ color: 'red' }}>{s.status}</div>
-          ) : (
-            s.history_count > 0 &&
-            s.phase !== 'HANDOFF NEEDED' &&
-            s.phase !== 'PUBLISH' && <div style={{ color: '#888' }}>no progress hint (soft)</div>
-          )}
-          {s.phase === 'HANDOFF NEEDED' && s.pane_tail && (
-            <pre>{s.pane_tail.join('\n')}</pre>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
+      <div style={{ flex: '1 1 60%' }}>
+        {!selected ? (
+          <div className="empty">Select a swarm to see details.</div>
+        ) : (
+          <div>
+            <h3>{selected.slug}</h3>
+            <PhaseTimeline phase={selected.phase} />
+            <div>Branch: {selected.branch}</div>
+            <div>Worktree: {selected.worktree}</div>
+            <div>Last activity: {elapsedLabel(selected.last_history?.timestamp)}</div>
+            {isStalled(selected.status) ? (
+              <div style={{ color: 'red' }}>{selected.status}</div>
+            ) : (
+              selected.history_count > 0 &&
+              selected.phase !== 'HANDOFF NEEDED' &&
+              selected.phase !== 'PUBLISH' && <div style={{ color: '#888' }}>no progress hint (soft)</div>
+            )}
+            <h4>Recent history</h4>
+            <ul>
+              {selected.recent_history.map((h, i) => (
+                <li key={i}>{h.phase} — {h.note}</li>
+              ))}
+            </ul>
+            {selected.phase === 'HANDOFF NEEDED' && selected.pane_tail && (
+              <pre>{selected.pane_tail.join('\n')}</pre>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1427,7 +1537,7 @@ export default function SwarmsTab() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run SwarmsTab`
-Expected: PASS (4 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (10 tests total).
+Expected: PASS (5 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (11 tests total).
 
 - [ ] **Step 5: Build, write README, commit**
 
@@ -1483,4 +1593,6 @@ git commit -m "chore: bump dashboard submodule pointer — Swarms tab, feature-c
 
 **Placeholder scan:** none — every step above has runnable code, exact file paths, and exact commands.
 
-**Type consistency:** `Swarm`/`UsageData`/`TrackerRow` are defined once in Task 7's `src/api.ts` and imported (never redefined) in Tasks 8–10. `discover_swarms`'s Python dict keys (`slug`, `phase`, `status`, `handoff_to`, `worktree`, `branch`, `key_info`, `last_history`, `history_count`, `tmux_alive`, `pane_tail`) match `Swarm`'s TypeScript fields exactly, established in Task 2–3 and consumed unchanged through Task 10.
+**Type consistency:** `Swarm`/`UsageData`/`TrackerRow` are defined once in Task 7's `src/api.ts` and imported (never redefined) in Tasks 8–10. `discover_swarms`'s Python dict keys (`slug`, `phase`, `status`, `handoff_to`, `worktree`, `branch`, `key_info`, `last_history`, `recent_history`, `history_count`, `tmux_alive`, `pane_tail`) match `Swarm`'s TypeScript fields exactly, established in Task 2–3 and consumed unchanged through Task 10.
+
+**Swarms redesign (list + detail, 2026-08-19 update):** Task 10 rewritten for the list+detail split per `ui-layout-spec.md`'s REG-4 Detail Pane — phase timeline via the new `CHAIN_PHASES` constant and `PhaseTimeline` component, elapsed time via `elapsedLabel()`, recent-history log via `recent_history`. Task 2/3's `discover_swarms` gained the `recent_history` field (list of up to 5 entries, newest first) to feed it — Tasks 4–9 are unaffected (the field is purely additive to the JSON shape).

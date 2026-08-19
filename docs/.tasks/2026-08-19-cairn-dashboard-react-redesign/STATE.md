@@ -3,7 +3,7 @@
 Mode: Attended
 Phase: PUBLISH
 Handoff to: none (terminal)
-Status: Published. Doc Post-Impl clean (4 in-scope HIGH fixed + 3 MEDIUM/LOW cleaned by main-thread session, re-audit confirmed clean; 2 pre-existing out-of-scope HIGH remain unrelated to this task — pr-reviewer missing from README roster, /cairn-feedback missing from README command list). Submodule PR: https://github.com/jisundr/cairn-dashboard/pull/1. Parent PR: (recorded below once opened).
+Status: Published. Doc Post-Impl clean (4 in-scope HIGH fixed + 3 MEDIUM/LOW cleaned by main-thread session, re-audit confirmed clean; 2 pre-existing out-of-scope HIGH remain unrelated to this task — pr-reviewer missing from README roster, /cairn-feedback missing from README command list). Submodule PR: https://github.com/jisundr/cairn-dashboard/pull/1. Parent PR: https://github.com/jisundr/cairn/pull/13.
 Plan: docs/.plans/2026-08-19-cairn-dashboard-react-redesign.md
 Ticket: none
 Worktree: /Users/jaysondelosreyes/cairn/.worktrees/2026-08-19-cairn-dashboard-react-redesign

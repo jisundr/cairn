@@ -1,11 +1,11 @@
 ---
-description: "Open a realtime local usage dashboard for this project — token/cost totals, breakdowns by model/version/subagent/skill, a per-session table, and a task tracker tab. Requires /cairn-setup to have run first."
+description: "Open a realtime local usage dashboard for this project — token/cost totals, breakdowns by model/version/subagent/skill, a per-session table, a task tracker tab, and a swarms tab for monitoring Unattended coding-chain runs. Requires /cairn-setup to have run first."
 argument-hint: "[stop]"
 ---
 
 ## Your task
 
-This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no dependencies) — it reads this project's session transcripts directly from `~/.claude/projects/`, so there's nothing to install or configure first. It does require the project to have run `/cairn-setup`, though — see step 1 below. Its Tracker tab reads `docs/.tasks/TRACKER.md` if present (empty state if not — no dependency on `project-manager` having run).
+This runs cairn's own dashboard (`scripts/usage_dashboard.py`, stdlib Python, no dependencies, serving the `dashboard/` submodule's committed React build) — it reads this project's session transcripts directly from `~/.claude/projects/`, so there's nothing to install or configure first. It does require the project to have run `/cairn-setup`, though — see step 1 below. Its Usage/Tracker/Swarms tabs read `/api/usage`, `/api/tracker` (`docs/.tasks/TRACKER.md`, empty state if not present — no dependency on `project-manager` having run), and `/api/swarms` (`Mode: Unattended` tasks under `docs/.tasks/*/STATE.md`, empty state if none).
 
 **If `$ARGUMENTS` is `stop`:**
 

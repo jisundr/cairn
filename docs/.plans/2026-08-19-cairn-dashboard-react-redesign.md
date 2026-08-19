@@ -1398,6 +1398,19 @@ describe('SwarmsTab', () => {
     expect(screen.getByText(/STALLED/)).toBeInTheDocument()
   })
 
+  it('closing the detail panel deselects and returns to the empty state', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve([handoffSwarm]) } as Response)
+    ))
+    render(<SwarmsTab />)
+    await waitFor(() => expect(screen.getByText('2026-08-19-my-slug')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('2026-08-19-my-slug'))
+    expect(screen.getByText('feature/my-slug')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Close detail panel'))
+    expect(screen.getByText(/select a swarm/i)).toBeInTheDocument()
+    expect(screen.queryByText('feature/my-slug')).not.toBeInTheDocument()
+  })
+
   it('shows an empty state with no swarms', async () => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ json: () => Promise.resolve([]) } as Response)
@@ -1505,7 +1518,10 @@ export default function SwarmsTab() {
           <div className="empty">Select a swarm to see details.</div>
         ) : (
           <div>
-            <h3>{selected.slug}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>{selected.slug}</h3>
+              <button aria-label="Close detail panel" onClick={() => setSelectedSlug(null)}>×</button>
+            </div>
             <PhaseTimeline phase={selected.phase} />
             <div>Branch: {selected.branch}</div>
             <div>Worktree: {selected.worktree}</div>
@@ -1537,7 +1553,7 @@ export default function SwarmsTab() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run SwarmsTab`
-Expected: PASS (5 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (11 tests total).
+Expected: PASS (6 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (12 tests total).
 
 - [ ] **Step 5: Build, write README, commit**
 

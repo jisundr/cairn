@@ -20,6 +20,7 @@ import http.server
 import json
 import re
 import socket
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
@@ -125,6 +126,42 @@ def parse_state_md(path: Path) -> dict:
         key, _, value = line.partition(":")
         result[key.strip().lower().replace(" ", "_")] = value.strip()
     return result
+
+
+def _tmux_has_session(branch: str) -> bool | None:
+    """True/False if tmux answered, None if the tmux binary itself is unavailable."""
+    try:
+        result = subprocess.run(
+            ["tmux", "has-session", "-t", branch], capture_output=True, timeout=5
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    return result.returncode == 0
+
+
+def discover_swarms(cwd: str) -> list:
+    """Mode: Unattended tasks under docs/.tasks/*/STATE.md, with tmux liveness."""
+    swarms = []
+    for task_dir in sorted(Path(cwd).glob("docs/.tasks/*/")):
+        state = parse_state_md(task_dir / "STATE.md")
+        if state.get("mode") != "Unattended":
+            continue
+        history = parse_history_md(task_dir / "HISTORY.md")
+        branch = state.get("branch", "")
+        swarms.append({
+            "slug": task_dir.name,
+            "phase": state.get("phase", ""),
+            "status": state.get("status", ""),
+            "handoff_to": state.get("handoff_to", ""),
+            "worktree": state.get("worktree", ""),
+            "branch": branch,
+            "key_info": state.get("key_info", ""),
+            "last_history": history[-1] if history else None,
+            "recent_history": list(reversed(history[-5:])),
+            "history_count": len(history),
+            "tmux_alive": _tmux_has_session(branch) if branch else None,
+        })
+    return swarms
 
 
 def _parse_iso(ts: str) -> datetime:

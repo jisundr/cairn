@@ -268,6 +268,36 @@ def test_subagent_and_skill_calls_counted(tmp_path):
     assert by_skill["cairn:spec-writing"] == 1
 
 
+def test_session_carries_model_costs_subagents_and_skills(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    line = json.dumps({
+        "type": "assistant",
+        "timestamp": "2026-08-14T01:00:00Z",
+        "message": {
+            "model": "claude-sonnet-5",
+            "usage": {"input_tokens": 1, "output_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            "content": [
+                {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "cairn:intent-analyzer"}},
+                {"type": "tool_use", "name": "Skill", "input": {"skill": "cairn:spec-writing"}},
+            ],
+        },
+    })
+    _write_session(transcripts_dir, "session-a", [line])
+
+    result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
+    session = result["sessions"][0]
+
+    assert "claude-sonnet-5" in session["model_costs"]
+    assert session["subagents"] == {"cairn:intent-analyzer": 1}
+    assert session["skills"] == {"cairn:spec-writing": 1}
+    # all-time aggregates still populate the same as before this fix
+    assert result["by_subagent"][0]["name"] == "cairn:intent-analyzer"
+
+
 def test_parse_tracker_md_parses_rows_with_milestone(tmp_path):
     tracker = tmp_path / "TRACKER.md"
     tracker.write_text(
@@ -489,3 +519,170 @@ def test_build_window_report_no_transcripts_reports_unavailable(tmp_path):
     report = usage_dashboard.build_window_report(str(cwd), projects_root, "2026-08-17T14:00:00Z", "2026-08-17T15:00:00Z")
 
     assert report == "Usage: unavailable (no transcripts found for this project/window)"
+
+
+def test_parse_state_md_parses_key_value_lines(tmp_path):
+    state = tmp_path / "STATE.md"
+    state.write_text(
+        "# Task: my-slug\n"
+        "\n"
+        "Mode: Unattended\n"
+        "Phase: HANDOFF NEEDED\n"
+        "Handoff to: qa-engineer\n"
+        "Status: waiting on a decision\n"
+        "Plan: docs/.plans/my-slug.md\n"
+        "Ticket: none\n"
+        "Worktree: /tmp/worktree\n"
+        "Branch: feature/my-slug\n"
+        "Key info: needs a human answer\n"
+        "Harness flags: none\n"
+    )
+    result = usage_dashboard.parse_state_md(state)
+    assert result["mode"] == "Unattended"
+    assert result["phase"] == "HANDOFF NEEDED"
+    assert result["handoff_to"] == "qa-engineer"
+    assert result["worktree"] == "/tmp/worktree"
+    assert result["branch"] == "feature/my-slug"
+
+
+def test_parse_state_md_missing_file_returns_empty(tmp_path):
+    assert usage_dashboard.parse_state_md(tmp_path / "nope.md") == {}
+
+
+def test_parse_state_md_ignores_non_key_value_lines(tmp_path):
+    state = tmp_path / "STATE.md"
+    state.write_text("# Task: my-slug\n\nMode: Attended\n\nJust some prose, no colon here really\n")
+    result = usage_dashboard.parse_state_md(state)
+    assert result == {"mode": "Attended"}
+
+
+def test_discover_swarms_finds_unattended_tasks_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(usage_dashboard, "_tmux_has_session", lambda branch: True)
+    cwd = tmp_path / "myproject"
+    unattended = cwd / "docs" / ".tasks" / "2026-08-19-my-slug"
+    unattended.mkdir(parents=True)
+    (unattended / "STATE.md").write_text(
+        "Mode: Unattended\nPhase: IMPLEMENT\nStatus: working\nHandoff to: software-engineer\n"
+        "Worktree: /tmp/wt\nBranch: feature/my-slug\nKey info: none\n"
+    )
+    (unattended / "HISTORY.md").write_text(
+        "2026-08-19T10:00:00Z — PLAN — plan read\n2026-08-19T10:05:00Z — IMPLEMENT — coding\n"
+    )
+    attended = cwd / "docs" / ".tasks" / "2026-08-19-other-slug"
+    attended.mkdir(parents=True)
+    (attended / "STATE.md").write_text("Mode: Attended\nPhase: IMPLEMENT\nStatus: working\n")
+
+    swarms = usage_dashboard.discover_swarms(str(cwd))
+
+    assert len(swarms) == 1
+    swarm = swarms[0]
+    assert swarm["slug"] == "2026-08-19-my-slug"
+    assert swarm["phase"] == "IMPLEMENT"
+    assert swarm["branch"] == "feature/my-slug"
+    assert swarm["history_count"] == 2
+    assert swarm["last_history"]["phase"] == "IMPLEMENT"
+    assert swarm["tmux_alive"] is True
+    assert [h["phase"] for h in swarm["recent_history"]] == ["IMPLEMENT", "PLAN"]
+
+
+def test_discover_swarms_recent_history_caps_at_5_newest_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(usage_dashboard, "_tmux_has_session", lambda branch: True)
+    cwd = tmp_path / "myproject"
+    task = cwd / "docs" / ".tasks" / "2026-08-19-my-slug"
+    task.mkdir(parents=True)
+    (task / "STATE.md").write_text("Mode: Unattended\nPhase: PUBLISH\nBranch: feature/x\n")
+    lines = [
+        f"2026-08-19T{10 + i:02d}:00:00Z — PHASE{i} — note {i}" for i in range(7)
+    ]
+    (task / "HISTORY.md").write_text("\n".join(lines) + "\n")
+
+    swarms = usage_dashboard.discover_swarms(str(cwd))
+    recent = swarms[0]["recent_history"]
+    assert len(recent) == 5
+    assert recent[0]["phase"] == "PHASE6"
+    assert recent[-1]["phase"] == "PHASE2"
+
+
+def test_discover_swarms_no_tasks_dir_returns_empty(tmp_path):
+    assert usage_dashboard.discover_swarms(str(tmp_path / "myproject")) == []
+
+
+def test_discover_swarms_tmux_missing_binary_sets_none(tmp_path, monkeypatch):
+    def raise_missing(branch):
+        raise FileNotFoundError("tmux not found")
+    monkeypatch.setattr(usage_dashboard, "_tmux_has_session", lambda branch: None)
+    cwd = tmp_path / "myproject"
+    task = cwd / "docs" / ".tasks" / "2026-08-19-my-slug"
+    task.mkdir(parents=True)
+    (task / "STATE.md").write_text("Mode: Unattended\nPhase: PLAN\nBranch: feature/x\n")
+
+    swarms = usage_dashboard.discover_swarms(str(cwd))
+    assert swarms[0]["tmux_alive"] is None
+
+
+def test_tmux_pane_tail_returns_last_lines(monkeypatch):
+    class FakeResult:
+        returncode = 0
+        stdout = b"line1\nline2\nline3\n"
+    monkeypatch.setattr(usage_dashboard.subprocess, "run", lambda *a, **k: FakeResult())
+    tail = usage_dashboard._tmux_pane_tail("feature/x", lines=2)
+    assert tail == ["line2", "line3"]
+
+
+def test_tmux_pane_tail_missing_binary_returns_none(monkeypatch):
+    def raise_missing(*a, **k):
+        raise FileNotFoundError("no tmux")
+    monkeypatch.setattr(usage_dashboard.subprocess, "run", raise_missing)
+    assert usage_dashboard._tmux_pane_tail("feature/x") is None
+
+
+def test_discover_swarms_includes_pane_tail_only_on_handoff_needed(tmp_path, monkeypatch):
+    monkeypatch.setattr(usage_dashboard, "_tmux_has_session", lambda branch: True)
+    monkeypatch.setattr(usage_dashboard, "_tmux_pane_tail", lambda branch, lines=20: ["paused here"])
+    cwd = tmp_path / "myproject"
+    task = cwd / "docs" / ".tasks" / "2026-08-19-my-slug"
+    task.mkdir(parents=True)
+    (task / "STATE.md").write_text("Mode: Unattended\nPhase: HANDOFF NEEDED\nBranch: feature/x\n")
+
+    swarms = usage_dashboard.discover_swarms(str(cwd))
+    assert swarms[0]["pane_tail"] == ["paused here"]
+
+    (task / "STATE.md").write_text("Mode: Unattended\nPhase: IMPLEMENT\nBranch: feature/x\n")
+    swarms = usage_dashboard.discover_swarms(str(cwd))
+    assert swarms[0]["pane_tail"] is None
+
+
+def test_serve_static_serves_existing_file(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>hi</html>")
+    (dist / "app.js").write_text("console.log(1)")
+
+    content_type, body = usage_dashboard.serve_static(dist, "/app.js")
+    assert body == b"console.log(1)"
+    assert "javascript" in content_type
+
+
+def test_serve_static_falls_back_to_index_for_unknown_path(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>spa root</html>")
+
+    content_type, body = usage_dashboard.serve_static(dist, "/some/client/route")
+    assert body == b"<html>spa root</html>"
+    assert content_type == "text/html"
+
+
+def test_serve_static_missing_dist_returns_none(tmp_path):
+    assert usage_dashboard.serve_static(tmp_path / "dist", "/") is None
+
+
+def test_serve_static_blocks_path_traversal(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>spa root</html>")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("shh")
+
+    content_type, body = usage_dashboard.serve_static(dist, "/../secret.txt")
+    assert body == b"<html>spa root</html>"

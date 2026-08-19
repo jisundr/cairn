@@ -108,6 +108,25 @@ def parse_history_md(path: Path) -> list:
     return entries
 
 
+def parse_state_md(path: Path) -> dict:
+    """Generic STATE.md key:value parser. {} if the file doesn't exist.
+
+    Keys are lowercased with spaces replaced by underscores (e.g. "Handoff to"
+    -> "handoff_to"). Lines that aren't "Key: value" (the H1 title, blank
+    lines, prose without a colon) are skipped.
+    """
+    if not path.exists():
+        return {}
+    result = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        result[key.strip().lower().replace(" ", "_")] = value.strip()
+    return result
+
+
 def _parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 

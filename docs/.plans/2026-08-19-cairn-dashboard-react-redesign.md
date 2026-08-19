@@ -2263,20 +2263,6 @@ git add dashboard
 git commit -m "chore: bump dashboard submodule pointer — Swarms tab, feature-complete"
 ```
 
-- [ ] **Step 6: Prune Impeccable critique history**
-
-`dashboard/.impeccable/critique/*.md` was committed during the mockup phase (Tasks 7-10 UI work) so critique history stayed visible while the design was in flux. Once this task lands, the plan is complete and that history is no longer needed — remove it:
-
-```bash
-cd dashboard
-git rm .impeccable/critique/*.md
-git commit -m "chore: prune Impeccable critique history — plan complete"
-git push
-cd ..
-git add dashboard
-git commit -m "chore: bump dashboard submodule pointer — prune critique history"
-```
-
 ---
 
 ## Self-Review Notes

@@ -951,8 +951,8 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Period+anchor+timezone model adapted from researching how maestro's own `token-usage-report` solves the identical problem (`periodWindow(period, anchorDay)`, one shared window every section reads from). No DST-transition edge-case handling — approximate, same documented tradeoff as `MODEL_PRICING`/`PLAN_WINDOW_LOOKBACK_SECONDS` elsewhere in this codebase.
 - Usage heatmap likewise adapted from maestro's `renderHeatmap()` (same reference file): a GitHub-style calendar layout (not a "contribution" concept — cells are colored by usage volume, not commit/contribution activity) covering full session history, Sunday-start weeks, Jan 1 of the earliest activity year through the latest session day, 5 intensity levels by quartile of per-day token volume against the busiest day. Deliberately independent of `period`/`anchor` (always full history) but re-bucketed on the `tz` toggle, same as the chart.
 - Sessions table is sortable/filterable/paginated (`PAGE_SIZE = 5`), adapted from maestro's generic `renderTable()` (click-to-sort, second click reverses) plus a Model/Version filter pair scoped to the current period window — new columns Model(s) and Tokens (total, with an input/output/cache-write/cache-read breakdown in the `title` attribute). Filter and sort selections persist across a period/anchor/tz switch; page resets to 0 since the underlying row set changed.
-- Cost-over-time chart carries a `chartMetric` toggle (`'cost' | 'tokens'`, default `'cost'`) — same bucketed window, same zero-fill, just a different per-session value summed into each bucket.
-- Ranking panels (By model/By cairn version/Top subagents/Top skills) render above the chart and carry a `rankingsScope` toggle (`'window' | 'all'`, default `'window'`) — All-time reads `data.by_model`/etc. unchanged (server-aggregated); Window aggregates client-side from `sessions` via `aggregateSessions()`, which depends on this task's `subagents`/`skills` fields added to `UsageSession` (Task 7) above.
+- Cost-over-time chart carries two independent toggles: `chartMetric` (`'cost' | 'tokens'`, default `'cost'`) and `chartScope` (`'window' | 'all'`, default `'window'`). Window uses the existing period/anchor bucketing (`win`, `sessions`); All-time uses `allTimeWindow()` — Jan 1 of the earliest session's year through today, monthly buckets, computed from `data.sessions` (full history), independent of `period`/`anchor`.
+- Ranking panels (By model/By cairn version/Top subagents/Top skills) render above the chart, always scoped to the current period/anchor window — no independent scope toggle (that lives on the chart instead). Aggregated client-side from `sessions` via `aggregateSessions()`, which depends on this task's `subagents`/`skills` fields added to `UsageSession` (Task 7) above.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1099,18 +1099,19 @@ describe('UsageTab', () => {
     expect(screen.getByRole('button', { name: 'Tokens' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('toggles ranking panels between Window and All-time scope', async () => {
-    const scoped = { ...sampleData, by_model: [{ model: 'claude-opus-5', calls: 99 } as never] }
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve(scoped) } as Response)))
+  it('toggles the chart between Window and All-time scope', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response))
+    vi.stubGlobal('fetch', fetchMock)
     render(<UsageTab />)
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
 
-    // Window (default): derived client-side from the windowed sessions, not data.by_model
-    expect(screen.getByText(/claude-sonnet-5/)).toBeInTheDocument()
-    expect(screen.queryByText(/claude-opus-5/)).not.toBeInTheDocument()
+    // Window (default, Weekly): 7 daily buckets, excludes the July session
+    expect(document.querySelectorAll('.chart-card rect.bar')).toHaveLength(7)
 
     fireEvent.click(screen.getByRole('button', { name: 'All-time' }))
-    expect(screen.getByText(/claude-opus-5/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // All-time: monthly buckets from Jan (earliest session's year) through the current month — Jan-Aug 2026
+    expect(document.querySelectorAll('.chart-card rect.bar')).toHaveLength(8)
   })
 
   it('paginates the sessions table past the page size', async () => {
@@ -1300,14 +1301,15 @@ function buildHeatmapWeeks(sessions: UsageSession[], tz: Timezone): HeatmapCell[
   return weeks
 }
 
-// Window-scope ranking aggregation, client-side from the already-windowed
-// `sessions` list — the All-time scope instead reads data.by_model/etc.
-// directly (server-aggregated, unchanged from before this toggle existed).
-// Approximation: model/version dimensions count session occurrences (a
-// multi-model session counts once per model it used), not a real per-model
-// cost split — UsageSession.models is a plain string[], no per-model cost
-// attribution exists client-side. subagent/skill dimensions ARE exact,
-// since UsageSession.subagents/skills already carry real per-session counts.
+// Ranking panel aggregation, client-side from the windowed `sessions` list —
+// ranking panels always match the period/anchor window (no independent
+// scope; that lives on the chart instead, see chartScope/allTimeWindow
+// below). Approximation: model/version dimensions count session occurrences
+// (a multi-model session counts once per model it used), not a real
+// per-model cost split — UsageSession.models is a plain string[], no
+// per-model cost attribution exists client-side. subagent/skill dimensions
+// ARE exact, since UsageSession.subagents/skills already carry real
+// per-session counts.
 type RankingDimension = 'model' | 'version' | 'subagent' | 'skill'
 function aggregateSessions(sessions: UsageSession[], dimension: RankingDimension): RankedRow[] {
   const totals: Record<string, number> = {}
@@ -1321,6 +1323,18 @@ function aggregateSessions(sessions: UsageSession[], dimension: RankingDimension
   return Object.entries(totals)
     .map(([key, calls]) => ({ [dimension]: key, calls }) as RankedRow)
     .sort((a, b) => b.calls - a.calls)
+}
+
+// The chart's All-time scope, independent of period/anchor — same
+// full-history-from-Jan-1-of-earliest-year framing as the heatmap, but
+// monthly buckets (not a day-cell grid) since a bar chart with one bar per
+// day over multiple years would be unreadably dense.
+function allTimeWindow(sessions: UsageSession[], tz: Timezone, now: Date): Window {
+  const withTs = sessions.filter((s) => s.timestamp)
+  if (!withTs.length) return { start: startOfDay(now, tz), end: startOfDay(now, tz), granularity: 'month' }
+  const earliest = withTs.reduce((min, s) => (s.timestamp! < min ? s.timestamp! : min), withTs[0].timestamp!)
+  const [y] = ymd(new Date(earliest), tz)
+  return { start: make(y, 0, 1, tz), end: startOfDay(now, tz), granularity: 'month' }
 }
 
 type SortKey = 'session_id' | 'timestamp' | 'models' | 'tokens' | 'calls' | 'cost' | 'version'
@@ -1340,7 +1354,7 @@ export default function UsageTab() {
   const [filterModel, setFilterModel] = useState('all')
   const [filterVersion, setFilterVersion] = useState('all')
   const [chartMetric, setChartMetric] = useState<'cost' | 'tokens'>('cost')
-  const [rankingsScope, setRankingsScope] = useState<'window' | 'all'>('window')
+  const [chartScope, setChartScope] = useState<'window' | 'all'>('window')
   const [page, setPage] = useState(0)
 
   useEffect(() => {
@@ -1367,11 +1381,13 @@ export default function UsageTab() {
     (acc, s) => { acc.cost += s.cost; acc.calls += s.calls; acc.unpriced_calls += s.unpriced_calls; return acc },
     { cost: 0, calls: 0, unpriced_calls: 0 },
   )
-  const buckets = zeroFillBuckets(win, tz)
+  const chartWin = chartScope === 'all' ? allTimeWindow(data.sessions, tz, now) : win
+  const chartSessions = chartScope === 'all' ? data.sessions : sessions
+  const buckets = zeroFillBuckets(chartWin, tz)
   const byBucket: Record<string, number> = {}
-  sessions.forEach((s) => {
+  chartSessions.forEach((s) => {
     if (!s.timestamp) return
-    const k = bucketKey(s.timestamp, win.granularity, tz)
+    const k = bucketKey(s.timestamp, chartWin.granularity, tz)
     const v = chartMetric === 'tokens' ? totalSessionTokens(s) : s.cost
     byBucket[k] = (byBucket[k] || 0) + v
   })
@@ -1412,14 +1428,12 @@ export default function UsageTab() {
     setPage(0)
   }
 
-  const rankings = rankingsScope === 'all'
-    ? { model: data.by_model, version: data.by_version, subagent: data.by_subagent, skill: data.by_skill }
-    : {
-        model: aggregateSessions(sessions, 'model'),
-        version: aggregateSessions(sessions, 'version'),
-        subagent: aggregateSessions(sessions, 'subagent'),
-        skill: aggregateSessions(sessions, 'skill'),
-      }
+  const rankings = {
+    model: aggregateSessions(sessions, 'model'),
+    version: aggregateSessions(sessions, 'version'),
+    subagent: aggregateSessions(sessions, 'subagent'),
+    skill: aggregateSessions(sessions, 'skill'),
+  }
 
   return (
     <div>
@@ -1474,10 +1488,6 @@ export default function UsageTab() {
           <div>{totals.unpriced_calls} call(s) used a model with no pricing entry — excluded from cost total.</div>
         )}
       </div>
-      <div role="group" aria-label="Ranking scope">
-        <button aria-selected={rankingsScope === 'window'} onClick={() => setRankingsScope('window')}>Window</button>
-        <button aria-selected={rankingsScope === 'all'} onClick={() => setRankingsScope('all')}>All-time</button>
-      </div>
       {([
         ['model', 'By model'], ['version', 'By cairn version'],
         ['subagent', 'Top subagents'], ['skill', 'Top skills'],
@@ -1496,6 +1506,10 @@ export default function UsageTab() {
         </div>
       ))}
       <div className="chart-card">
+        <div role="group" aria-label="Chart scope">
+          <button aria-selected={chartScope === 'window'} onClick={() => setChartScope('window')}>Window</button>
+          <button aria-selected={chartScope === 'all'} onClick={() => setChartScope('all')}>All-time</button>
+        </div>
         <div role="group" aria-label="Chart metric">
           <button aria-selected={chartMetric === 'cost'} onClick={() => setChartMetric('cost')}>Cost</button>
           <button aria-selected={chartMetric === 'tokens'} onClick={() => setChartMetric('tokens')}>Tokens</button>

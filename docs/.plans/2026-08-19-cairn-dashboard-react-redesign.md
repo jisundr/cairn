@@ -943,6 +943,7 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Period+anchor+timezone model adapted from researching how maestro's own `token-usage-report` solves the identical problem (`periodWindow(period, anchorDay)`, one shared window every section reads from). No DST-transition edge-case handling — approximate, same documented tradeoff as `MODEL_PRICING`/`PLAN_WINDOW_LOOKBACK_SECONDS` elsewhere in this codebase.
 - Usage heatmap likewise adapted from maestro's `renderHeatmap()` (same reference file): a GitHub-style calendar layout (not a "contribution" concept — cells are colored by usage volume, not commit/contribution activity) covering full session history, Sunday-start weeks, Jan 1 of the earliest activity year through the latest session day, 5 intensity levels by quartile of per-day token volume against the busiest day. Deliberately independent of `period`/`anchor` (always full history) but re-bucketed on the `tz` toggle, same as the chart.
 - Sessions table is sortable/filterable/paginated (`PAGE_SIZE = 5`), adapted from maestro's generic `renderTable()` (click-to-sort, second click reverses) plus a Model/Version filter pair scoped to the current period window — new columns Model(s) and Tokens (total, with an input/output/cache-write/cache-read breakdown in the `title` attribute). Filter and sort selections persist across a period/anchor/tz switch; page resets to 0 since the underlying row set changed.
+- Cost-over-time chart carries a `chartMetric` toggle (`'cost' | 'tokens'`, default `'cost'`) — same bucketed window, same zero-fill, just a different per-session value summed into each bucket.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1075,6 +1076,17 @@ describe('UsageTab', () => {
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-opus-5' } })
     expect(screen.queryByText('m1')).not.toBeInTheDocument()
     expect(screen.getByText('m2')).toBeInTheDocument()
+  })
+
+  it('toggles the chart between Cost and Tokens without a refetch', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tokens' }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Tokens' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('paginates the sessions table past the page size', async () => {
@@ -1280,6 +1292,7 @@ export default function UsageTab() {
   const [sortDir, setSortDir] = useState<1 | -1>(-1)
   const [filterModel, setFilterModel] = useState('all')
   const [filterVersion, setFilterVersion] = useState('all')
+  const [chartMetric, setChartMetric] = useState<'cost' | 'tokens'>('cost')
   const [page, setPage] = useState(0)
 
   useEffect(() => {
@@ -1311,7 +1324,8 @@ export default function UsageTab() {
   sessions.forEach((s) => {
     if (!s.timestamp) return
     const k = bucketKey(s.timestamp, win.granularity, tz)
-    byBucket[k] = (byBucket[k] || 0) + s.cost
+    const v = chartMetric === 'tokens' ? totalSessionTokens(s) : s.cost
+    byBucket[k] = (byBucket[k] || 0) + v
   })
   const max = Math.max(...buckets.map((b) => byBucket[b] || 0), 0.01)
 
@@ -1404,11 +1418,15 @@ export default function UsageTab() {
         )}
       </div>
       <div className="chart-card">
+        <div role="group" aria-label="Chart metric">
+          <button aria-selected={chartMetric === 'cost'} onClick={() => setChartMetric('cost')}>Cost</button>
+          <button aria-selected={chartMetric === 'tokens'} onClick={() => setChartMetric('tokens')}>Tokens</button>
+        </div>
         <svg viewBox="0 0 700 150">
           {buckets.map((b, i) => {
-            const cost = byBucket[b] || 0
+            const value = byBucket[b] || 0
             const barW = Math.max(3, 700 / buckets.length - 4)
-            const barH = Math.max(1, (cost / max) * 130)
+            const barH = Math.max(1, (value / max) * 130)
             return <rect key={b} className="bar" x={i * (barW + 4)} y={130 - barH} width={barW} height={barH} />
           })}
         </svg>
@@ -1493,7 +1511,7 @@ Fix `shiftAnchor`'s yearly branch before running tests — the version above has
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
-Expected: PASS (10 tests)
+Expected: PASS (11 tests)
 
 - [ ] **Step 5: Commit**
 

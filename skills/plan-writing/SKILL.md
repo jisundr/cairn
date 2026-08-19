@@ -1,11 +1,11 @@
 ---
 name: plan-writing
-description: cairn's path-override wrapper for superpowers:writing-plans. Invoke instead of superpowers:writing-plans directly whenever intent-analyzer's Brainstorming Gate has fired, or when cairn:spec-writing hands off to it — runs the real methodology unchanged, redirecting the implementation-plan save path to docs/.plans/ instead of the vendor default docs/superpowers/plans/, and adding an optional final step that drafts a /goal completion condition for the plan.
+description: cairn's path-override wrapper for superpowers:writing-plans. Invoke instead of superpowers:writing-plans directly whenever intent-analyzer's Brainstorming Gate has fired, or when cairn:spec-writing hands off to it — runs the real methodology unchanged, redirecting the implementation-plan save path to docs/.plans/ instead of the vendor default docs/superpowers/plans/, and adding two steps after that: a complexity check that can route a plan changing existing behavior to task-orchestrator instead, and — only when it doesn't — an optional step that drafts a /goal completion condition for the plan.
 ---
 
 # Plan Writing (cairn path override)
 
-Thin wrapper around `superpowers:writing-plans`. Does not reimplement or duplicate that skill's methodology — invokes it directly and changes exactly one thing about where the plan is saved, and adds one optional step: drafting a `/goal` completion condition for the plan after it's written.
+Thin wrapper around `superpowers:writing-plans`. Does not reimplement or duplicate that skill's methodology — invokes it directly and changes exactly one thing about where the plan is saved, and adds two steps after that: a complexity check that can route a plan changing existing behavior to `task-orchestrator` instead, and — only when it doesn't — an optional step that drafts a `/goal` completion condition for the plan after it's written.
 
 ## Hard requirement
 
@@ -25,6 +25,9 @@ After `superpowers:writing-plans` completes its own flow (plan written, reviewed
 
 `/goal` is a built-in Claude Code slash command, not a marketplace skill — it is not invocable via the `Skill` tool. This step never invokes it; it drafts and persists the condition, then prints the exact manual command for the user to run themselves.
 
+0. **Complexity check.** Read the plan's `### Task N:` blocks and their **Files** sections. If any task's `Modify: <path>` entry changes an *existing* file's current behavior (not just an appended paragraph/bullet — an edit to existing agent process steps, an existing skill's methodology, or similar), present via `AskUserQuestion`: *"This plan changes existing behavior — recommend running it through the coding chain (`task-orchestrator`) instead of a `/goal` loop, for independent verification. Route through Chain flow, or continue with `/goal`-file drafting?"* — citing which task/file drove the recommendation. This is a judgment call reading the plan, not a mechanical count of `Modify:` lines — the same kind of distinction `qa-auditor` already draws between an added/modified line and a pre-existing one.
+   - **Chain flow chosen:** skip the rest of this section entirely — a `/goal` file has no role once Chain flow is running its own Attended/Unattended machinery. Hand off to `task-orchestrator` Plan Mode with the plan's slug instead of the `executing-plans` hand-off in Step 8 below.
+   - **Continue with `/goal` chosen, or the plan is purely additive** (every task is `Create:`, or `Modify:` is append-only with no behavior change) — no question needed in the additive case, proceed straight to Step 1 below, unchanged.
 1. **Offer.** One `AskUserQuestion`: "Draft a `/goal` completion condition for this plan too, so you can run it unattended?" On decline, proceed straight to the existing `executing-plans` hand-off — nothing else in this section applies.
 2. **Pre-fill.** Read the plan's own acceptance-criteria/testing sections (the review checkpoints `writing-plans` itself just produced). Compose a candidate end-state and stated-check from them — do not re-ask what the plan already establishes.
 3. **Ask what's missing**, one question at a time via `AskUserQuestion`:

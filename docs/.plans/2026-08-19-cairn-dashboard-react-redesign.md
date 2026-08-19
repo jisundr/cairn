@@ -941,6 +941,7 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Consumes: `fetchUsage()`, `UsageData`, `UsageSession` (Task 7's `src/api.ts`).
 - Produces: `<UsageTab />` — no other component depends on its internals.
 - Period+anchor+timezone model adapted from researching how maestro's own `token-usage-report` solves the identical problem (`periodWindow(period, anchorDay)`, one shared window every section reads from). No DST-transition edge-case handling — approximate, same documented tradeoff as `MODEL_PRICING`/`PLAN_WINDOW_LOOKBACK_SECONDS` elsewhere in this codebase.
+- Usage heatmap likewise adapted from maestro's `renderHeatmap()` (same reference file): a GitHub-style calendar layout (not a "contribution" concept — cells are colored by usage volume, not commit/contribution activity) covering full session history, Sunday-start weeks, Jan 1 of the earliest activity year through the latest session day, 5 intensity levels by quartile of per-day token volume against the busiest day. Deliberately independent of `period`/`anchor` (always full history) but re-bucketed on the `tz` toggle, same as the chart.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1022,6 +1023,29 @@ describe('UsageTab', () => {
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Local' }))
     expect(screen.getByRole('button', { name: 'Local' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('renders a full-history usage heatmap, independent of the period filter', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response)
+    ))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
+
+    expect(screen.getByTitle(/2026-08-19/)).toBeInTheDocument()
+    expect(screen.getByTitle(/2026-07-01/)).toBeInTheDocument() // outside the default Weekly window, still in the heatmap
+
+    fireEvent.click(screen.getByRole('button', { name: 'Daily' }))
+    expect(screen.getByTitle(/2026-07-01/)).toBeInTheDocument() // heatmap unaffected by period switch
+  })
+
+  it('shows a heatmap empty state with no session history at all', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve({ ...sampleData, sessions: [] }) } as Response)
+    ))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText(/no sessions/i)).toBeInTheDocument())
+    expect(screen.getByText(/no activity yet/i)).toBeInTheDocument()
   })
 })
 ```
@@ -1143,6 +1167,60 @@ function anchorLabel(period: Period, win: Window): string {
   return win.start.toLocaleDateString(undefined, opts)
 }
 
+// Usage heatmap: GitHub-style calendar layout, but cells are colored by
+// usage volume (tokens), not "contributions" — deliberately independent of
+// period/anchor (always full history, like a profile page), re-bucketed only
+// on the tz toggle. Adapted from maestro's renderHeatmap().
+function totalSessionTokens(s: UsageSession): number {
+  return s.input_tokens + s.output_tokens + s.cache_creation_input_tokens + s.cache_read_input_tokens
+}
+
+function levelFor(tokens: number, maxTokens: number): number {
+  if (!tokens) return 0
+  if (!maxTokens) return 1
+  const ratio = tokens / maxTokens
+  if (ratio > 0.75) return 4
+  if (ratio > 0.5) return 3
+  if (ratio > 0.25) return 2
+  return 1
+}
+
+interface HeatmapCell { date: Date | null; tokens: number; cost: number }
+
+function buildHeatmapWeeks(sessions: UsageSession[], tz: Timezone): HeatmapCell[][] {
+  if (!sessions.length) return []
+  const byDay: Record<string, { tokens: number; cost: number }> = {}
+  sessions.forEach((s) => {
+    if (!s.timestamp) return
+    const key = bucketKey(s.timestamp, 'day', tz)
+    const entry = byDay[key] || { tokens: 0, cost: 0 }
+    entry.tokens += totalSessionTokens(s)
+    entry.cost += s.cost
+    byDay[key] = entry
+  })
+  const days = Object.keys(byDay).sort()
+  if (!days.length) return []
+  const firstYear = Number(days[0].slice(0, 4))
+  const start = make(firstYear, 0, 1, tz)
+  const end = startOfDay(new Date(days[days.length - 1]), tz)
+  const startSunday = addDays(start, -dow(start, tz), tz)
+
+  const weeks: HeatmapCell[][] = []
+  let week: HeatmapCell[] = []
+  for (let cursor = startSunday; cursor <= end; cursor = addDays(cursor, 1, tz)) {
+    if (cursor < start) {
+      week.push({ date: null, tokens: 0, cost: 0 })
+    } else {
+      const key = bucketKey(cursor.toISOString(), 'day', tz)
+      const entry = byDay[key] || { tokens: 0, cost: 0 }
+      week.push({ date: cursor, tokens: entry.tokens, cost: entry.cost })
+    }
+    if (week.length === 7) { weeks.push(week); week = [] }
+  }
+  if (week.length) { while (week.length < 7) week.push({ date: null, tokens: 0, cost: 0 }); weeks.push(week) }
+  return weeks
+}
+
 export default function UsageTab() {
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState<Period>('weekly')
@@ -1162,6 +1240,7 @@ export default function UsageTab() {
 
   const now = new Date()
   const win = useMemo(() => periodWindow(period, anchor, tz, now), [period, anchor, tz])
+  const heatmapWeeks = useMemo(() => buildHeatmapWeeks(data?.sessions ?? [], tz), [data, tz])
 
   if (!data) return <div className="empty">Loading…</div>
 
@@ -1182,9 +1261,36 @@ export default function UsageTab() {
   const earliestTs = data.sessions.reduce((min, s) => (s.timestamp && s.timestamp < min ? s.timestamp : min), data.sessions[0]?.timestamp ?? '')
   const prevDisabled = period === 'ytd' || (earliestTs !== '' && win.start <= new Date(earliestTs))
   const nextDisabled = period === 'ytd' || win.end >= startOfDay(now, tz)
+  const maxDayTokens = Math.max(0, ...heatmapWeeks.flat().map((c) => c.tokens))
 
   return (
     <div>
+      {/* Shown first, above the period toolbar — the heatmap is static (full
+          history) and doesn't respond to period/anchor, only to tz below. */}
+      <div className="card">
+        <div className="head">Usage</div>
+        {heatmapWeeks.length === 0 ? (
+          <div className="empty">No activity yet.</div>
+        ) : (
+          <div role="img" aria-label="Usage heatmap">
+            {heatmapWeeks.map((week, wi) => (
+              <div key={wi}>
+                {week.map((cell, di) =>
+                  cell.date ? (
+                    <div
+                      key={di}
+                      title={`${cell.date.toISOString().slice(0, 10)}: ${fmt(cell.tokens)} tokens, ${usd(cell.cost)}`}
+                      data-level={levelFor(cell.tokens, maxDayTokens)}
+                    />
+                  ) : (
+                    <div key={di} />
+                  ),
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div role="group" aria-label="Period">
         {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
           <button key={p} aria-selected={period === p} onClick={() => setPeriod(p)}>{PERIOD_LABELS[p]}</button>
@@ -1265,7 +1371,7 @@ Fix `shiftAnchor`'s yearly branch before running tests — the version above has
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
-Expected: PASS (5 tests)
+Expected: PASS (7 tests)
 
 - [ ] **Step 5: Commit**
 

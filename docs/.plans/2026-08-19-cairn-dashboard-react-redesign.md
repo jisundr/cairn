@@ -1411,6 +1411,17 @@ describe('SwarmsTab', () => {
     expect(screen.queryByText('feature/my-slug')).not.toBeInTheDocument()
   })
 
+  it('defaults to Priority sort — Handoff Needed before a Running swarm', async () => {
+    const runningSwarm: Swarm = { ...stalledSwarm, slug: '2026-08-19-running-slug', status: 'working' }
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve([runningSwarm, handoffSwarm]) } as Response)
+    ))
+    render(<SwarmsTab />)
+    await waitFor(() => expect(screen.getByText('2026-08-19-running-slug')).toBeInTheDocument())
+    const slugs = screen.getAllByText(/^2026-08-19-/).map((el) => el.textContent)
+    expect(slugs.indexOf('2026-08-19-my-slug')).toBeLessThan(slugs.indexOf('2026-08-19-running-slug'))
+  })
+
   it('shows an empty state with no swarms', async () => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ json: () => Promise.resolve([]) } as Response)
@@ -1435,6 +1446,28 @@ import { fetchSwarms, CHAIN_PHASES, type Swarm } from '../api'
 
 function isStalled(status: string): boolean {
   return status.startsWith('STALLED (')
+}
+
+type SortMode = 'priority' | 'recent' | 'name'
+
+function priorityRank(s: Swarm): number {
+  if (s.phase === 'HANDOFF NEEDED') return 0
+  if (isStalled(s.status)) return 1
+  if (s.phase === 'PUBLISH') return 3
+  return 2
+}
+
+function sortSwarms(swarms: Swarm[], mode: SortMode): Swarm[] {
+  const copy = [...swarms]
+  if (mode === 'name') return copy // already slug-ordered from the backend
+  if (mode === 'recent') {
+    return copy.sort((a, b) => {
+      const at = a.last_history?.timestamp ?? ''
+      const bt = b.last_history?.timestamp ?? ''
+      return bt.localeCompare(at) // newest first, missing timestamps sort last
+    })
+  }
+  return copy.sort((a, b) => priorityRank(a) - priorityRank(b))
 }
 
 function elapsedLabel(timestamp: string | undefined): string {
@@ -1469,6 +1502,7 @@ function PhaseTimeline({ phase }: { phase: string }) {
 export default function SwarmsTab() {
   const [swarms, setSwarms] = useState<Swarm[] | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<SortMode>('priority')
 
   useEffect(() => {
     let cancelled = false
@@ -1490,11 +1524,20 @@ export default function SwarmsTab() {
   }
 
   const selected = swarms.find((s) => s.slug === selectedSlug) ?? null
+  const sorted = sortSwarms(swarms, sortMode)
 
   return (
-    <div style={{ display: 'flex', gap: '1rem' }}>
+    <div>
+      <div role="group" aria-label="Sort order" style={{ marginBottom: '.75rem' }}>
+        {(['priority', 'recent', 'name'] as SortMode[]).map((m) => (
+          <button key={m} aria-selected={sortMode === m} onClick={() => setSortMode(m)}>
+            {m === 'priority' ? 'Priority' : m === 'recent' ? 'Recent activity' : 'Name'}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '1rem' }}>
       <div style={{ flex: '0 0 40%' }}>
-        {swarms.map((s) => (
+        {sorted.map((s) => (
           <div
             key={s.slug}
             onClick={() => setSelectedSlug(s.slug)}
@@ -1545,6 +1588,7 @@ export default function SwarmsTab() {
           </div>
         )}
       </div>
+      </div>
     </div>
   )
 }
@@ -1553,7 +1597,7 @@ export default function SwarmsTab() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run SwarmsTab`
-Expected: PASS (6 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (12 tests total).
+Expected: PASS (7 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (13 tests total).
 
 - [ ] **Step 5: Build, write README, commit**
 

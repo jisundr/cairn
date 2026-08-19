@@ -18,6 +18,7 @@ stdlib only, no dependencies. Serves:
 
 import http.server
 import json
+import mimetypes
 import re
 import socket
 import subprocess
@@ -489,451 +490,25 @@ def aggregate_usage(cwd: str, projects_root: Path) -> dict:
     }
 
 
-PAGE_HTML = """<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Cairn Dashboard</title>
-<style>
-  :root {
-    --bg: #f6f4ee; --card: #ffffff; --border: #e6e2d8; --text: #1c1c1a; --dim: #6b6b62;
-    --faint: #9a978c; --accent: #3d8b5f; --accent-2: #d9a441; --danger: #b5482f;
-    --idea: #8a8a80; --groomed: #4472c4; --progress: #d9a441; --review: #8757b0;
-    --blocked: #b5482f; --done: #3d8b5f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #15171a; --card: #1e2124; --border: #2c2f33; --text: #e9e7e0; --dim: #9c9a92;
-      --faint: #6d6b63; --accent: #4fae7c; --accent-2: #e0b256; --danger: #d16249;
-    }
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; color: var(--text); background: var(--bg); display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: 1.5rem; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
-  h1 span { color: var(--accent); }
-  .tabs { display: flex; gap: .25rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .2rem; }
-  .tab { padding: .4rem .9rem; border-radius: 6px; cursor: pointer; color: var(--dim); font-size: .85rem; }
-  .tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-  #project { color: var(--faint); font-size: .8rem; margin-left: auto; }
-  .toolbar { display: flex; gap: 1.5rem; align-items: center; padding: .85rem 1.5rem; flex-wrap: wrap; }
-  .range { display: flex; gap: .25rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: .2rem; }
-  .range button { border: none; background: none; padding: .35rem .7rem; border-radius: 6px; cursor: pointer; color: var(--dim); font-size: .8rem; }
-  .range button.active { background: var(--bg); color: var(--text); }
-  main { padding: 0 1.5rem 2rem; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-  .view { display: none; }
-  .view.active { display: flex; flex-direction: column; height: 100%; }
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1.1rem; }
-  .stat .label { font-size: .7rem; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .3rem; }
-  .stat .value { font-size: 1.4rem; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .stat .value.accent { color: var(--accent); }
-  .stat .sub { font-size: .72rem; color: var(--faint); margin-top: .2rem; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
-  .card .head { font-size: .7rem; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .9rem; }
-  .chart-card svg { width: 100%; height: 180px; overflow: visible; }
-  .chart-card .bar { fill: var(--accent); }
-  .chart-card .bar:hover { fill: var(--accent-2); }
-  .chart-card .axis { font-size: 10px; fill: var(--faint); }
-  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-  .rank-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem; align-items: center; padding: .35rem 0; font-size: .82rem; }
-  .rank-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rank-row .bar-track { grid-column: 1 / -1; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-bottom: .5rem; }
-  .rank-row .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-  .rank-row .num { font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
-  .empty { color: var(--faint); font-size: .85rem; padding: .5rem 0; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-  th { font-size: .68rem; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
-  td.num { text-align: right; }
-  .pill { display: inline-block; padding: .15rem .55rem; border-radius: 99px; font-size: .72rem; font-weight: 600; color: #fff; }
-  #updated { color: var(--faint); font-size: .72rem; padding: 1rem 1.5rem 2rem; }
-  .unpriced-note { color: var(--danger); font-size: .72rem; margin-top: -.3rem; margin-bottom: 1rem; }
-
-  .subtabs { display: flex; gap: .25rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: .2rem; width: fit-content; margin-bottom: 1rem; }
-  .subtab { padding: .35rem .85rem; border-radius: 6px; cursor: pointer; color: var(--dim); font-size: .8rem; }
-  .subtab.active { background: var(--bg); color: var(--text); }
-
-  .board { display: flex; gap: .9rem; overflow-x: auto; overflow-y: auto; padding-bottom: .5rem; align-items: flex-start; flex: 1 1 auto; min-height: 0; }
-  .col { flex: 0 0 260px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: .8rem; border-top: 3px solid var(--idea); }
-  .col-groomed { border-top-color: var(--groomed); }
-  .col-progress { border-top-color: var(--progress); }
-  .col-review { border-top-color: var(--review); }
-  .col-blocked { border-top-color: var(--blocked); }
-  .col-done { border-top-color: var(--done); }
-  .col h2 { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); margin: .2rem .2rem .7rem; display: flex; justify-content: space-between; font-weight: 600; }
-  .task-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .7rem; margin-bottom: .6rem; }
-  .card-milestone { font-size: .66rem; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .3rem; }
-  .task-card .slug { font-weight: 600; font-size: .82rem; }
-  .task-card .scope { color: var(--dim); font-size: .78rem; margin-top: .2rem; line-height: 1.35; }
-  .task-card .foot { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .5rem; }
-  .tag { background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: .1rem .45rem; color: var(--faint); font-size: .68rem; }
-
-  .road-wrap { overflow-x: auto; overflow-y: auto; padding-bottom: .5rem; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  .rmap { display: flex; align-items: flex-start; min-width: min-content; flex: 1 1 auto; }
-  .rstation { flex: 0 0 260px; }
-  .rnoderow { position: relative; height: 44px; display: flex; align-items: center; justify-content: center; }
-  .rnoderow::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); background: var(--border); }
-  .rstation.filled .rnoderow::before { background: var(--accent); }
-  .rstation:first-child .rnoderow::before { left: 50%; }
-  .rstation:last-child .rnoderow::before { right: 50%; }
-  .rnode { position: relative; z-index: 1; width: 40px; height: 40px; display: grid; place-items: center; color: var(--dim); background: var(--bg); border-radius: 50%; }
-  .rbody { padding: .9rem 1rem 0; }
-  .rname { font-weight: 600; font-size: .82rem; }
-  .rname span.rcount { font-weight: 400; }
-  .rcount { color: var(--faint); font-size: .72rem; margin-left: .3rem; }
-  .icard { border-left: 3px solid var(--accent); background: var(--bg); border-radius: 6px; padding: .4rem .55rem; margin-top: .5rem; font-size: .78rem; }
-  .icard.is-done { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--border); border-left-color: var(--done); }
-  .blocked-badge { align-self: flex-start; background: var(--blocked); color: #fff; border-radius: 99px; padding: .15rem .6rem; font-size: .72rem; font-weight: 600; margin-bottom: .8rem; flex: 0 0 auto; }
-
-  .hidden { display: none !important; }
-</style>
-</head>
-<body>
-  <header>
-    <h1>Cairn <span>Dashboard</span></h1>
-    <div class="tabs">
-      <div class="tab active" data-view="usage">Usage</div>
-      <div class="tab" data-view="tracker">Tracker</div>
-    </div>
-    <div id="project"></div>
-  </header>
-  <div class="toolbar">
-    <div class="range" id="range">
-      <button data-range="today">Today</button>
-      <button data-range="7" class="active">7 days</button>
-      <button data-range="30">30 days</button>
-      <button data-range="month">Month</button>
-      <button data-range="all">All</button>
-    </div>
-  </div>
-  <main>
-    <section class="view active" id="view-usage">
-      <div class="stat-grid" id="stat-grid"></div>
-      <div id="unpriced-note"></div>
-      <div class="card chart-card">
-        <div class="head">Cost over time</div>
-        <svg id="chart"></svg>
-      </div>
-      <div class="card-grid">
-        <div class="card"><div class="head">By model (all time)</div><div id="by-model"></div></div>
-        <div class="card"><div class="head">By cairn version (all time)</div><div id="by-version"></div></div>
-        <div class="card"><div class="head">Top subagents (all time)</div><div id="by-subagent"></div></div>
-        <div class="card"><div class="head">Top skills (all time)</div><div id="by-skill"></div></div>
-      </div>
-      <div class="card">
-        <div class="head">Sessions</div>
-        <table>
-          <thead>
-            <tr><th>Session</th><th>Started</th><th class="num">Calls</th><th class="num">Cost</th><th class="num">In</th><th class="num">Out</th><th class="num">Cache R</th><th class="num">Cache W</th><th>Version</th></tr>
-          </thead>
-          <tbody id="sessions"></tbody>
-        </table>
-      </div>
-    </section>
-    <section class="view" id="view-tracker">
-      <div class="subtabs" id="tracker-subtabs">
-        <div class="subtab active" data-sub="board">Board</div>
-        <div class="subtab" data-sub="road">Roadmap</div>
-      </div>
-      <div class="board" id="board"></div>
-      <div class="road-wrap hidden" id="road-wrap">
-        <div class="blocked-badge hidden" id="blocked-badge"></div>
-        <div class="rmap" id="road"></div>
-      </div>
-      <div class="empty" id="tracker-empty" style="display:none">No tasks tracked yet — run <code>project-manager</code> to decompose a PRD into docs/.tasks/TRACKER.md.</div>
-    </section>
-  </main>
-  <div id="updated"></div>
-<script>
-function fmt(n) { return Math.round(n).toLocaleString(); }
-function usd(n) { return '$' + n.toFixed(2); }
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-// Tab state lives in location.hash (#usage, #tracker, #tracker/road) so a refresh or a
-// shared link lands back on the same view instead of always resetting to Usage.
-function setTab(view, sub, pushHash) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + view).classList.add('active');
-  document.querySelector('.toolbar').classList.toggle('hidden', view !== 'usage');
-
-  if (view === 'tracker') {
-    const activeSub = sub === 'road' ? 'road' : 'board';
-    document.querySelectorAll('#tracker-subtabs .subtab').forEach(t => t.classList.toggle('active', t.dataset.sub === activeSub));
-    const hasRows = document.getElementById('tracker-empty').style.display !== 'block';
-    document.getElementById('board').classList.toggle('hidden', !hasRows || activeSub !== 'board');
-    document.getElementById('road-wrap').classList.toggle('hidden', !hasRows || activeSub !== 'road');
-  }
-
-  if (pushHash) location.hash = view === 'tracker' && sub === 'road' ? 'tracker/road' : view;
-}
-
-function tabFromHash() {
-  const [view, sub] = location.hash.replace('#', '').split('/');
-  return view === 'tracker' ? ['tracker', sub] : ['usage', undefined];
-}
-
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const sub = document.querySelector('#tracker-subtabs .subtab.active')?.dataset.sub;
-    setTab(tab.dataset.view, sub, true);
-  });
-});
-
-window.addEventListener('hashchange', () => setTab(...tabFromHash(), false));
-
-let currentRange = '7';
-document.querySelectorAll('#range button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#range button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange = btn.dataset.range;
-    render();
-  });
-});
-
-let usageData = null;
-
-function sessionsInRange(sessions) {
-  if (currentRange === 'all') return sessions;
-  const now = new Date();
-  let cutoff;
-  if (currentRange === 'today') {
-    cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  } else if (currentRange === 'month') {
-    cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else {
-    cutoff = new Date(now.getTime() - Number(currentRange) * 86400000);
-  }
-  return sessions.filter(s => s.timestamp && new Date(s.timestamp) >= cutoff);
-}
-
-function rankRows(rows, nameKey, valueKey, valueFmt) {
-  if (!rows.length) return '<div class="empty">No data yet.</div>';
-  const max = Math.max(...rows.map(r => r[valueKey]), 1);
-  return rows.slice(0, 8).map(r => `
-    <div class="rank-row">
-      <div class="name">${esc(r[nameKey])}</div>
-      <div class="num">${valueFmt(r[valueKey])}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(r[valueKey] / max * 100).toFixed(1)}%"></div></div>
-    </div>
-  `).join('');
-}
-
-function renderChart(sessions) {
-  const byDay = {};
-  for (const s of sessions) {
-    if (!s.timestamp) continue;
-    const day = s.timestamp.slice(0, 10);
-    byDay[day] = (byDay[day] || 0) + s.cost;
-  }
-  const days = Object.keys(byDay).sort();
-  const svg = document.getElementById('chart');
-  if (!days.length) { svg.innerHTML = ''; return; }
-  const max = Math.max(...days.map(d => byDay[d]), 0.01);
-  const w = svg.clientWidth || 800, h = 160, barGap = 4;
-  const barW = Math.max(2, w / days.length - barGap);
-  let bars = '';
-  days.forEach((d, i) => {
-    const barH = (byDay[d] / max) * (h - 20);
-    const x = i * (barW + barGap);
-    bars += `<rect class="bar" x="${x}" y="${h - barH}" width="${barW}" height="${barH}"><title>${d}: ${usd(byDay[d])}</title></rect>`;
-  });
-  const labelEvery = Math.max(1, Math.ceil(days.length / 8));
-  let labels = '';
-  days.forEach((d, i) => {
-    if (i % labelEvery !== 0) return;
-    labels += `<text class="axis" x="${i * (barW + barGap)}" y="${h + 14}">${d.slice(5)}</text>`;
-  });
-  svg.setAttribute('viewBox', `0 0 ${w} ${h + 20}`);
-  svg.innerHTML = bars + labels;
-}
-
-function render() {
-  if (!usageData) return;
-  const sessions = sessionsInRange(usageData.sessions);
-
-  document.getElementById('project').textContent = usageData.project;
-
-  const t = sessions.reduce((acc, s) => {
-    acc.calls += s.calls; acc.cost += s.cost; acc.unpriced_calls += s.unpriced_calls;
-    acc.input_tokens += s.input_tokens; acc.output_tokens += s.output_tokens;
-    acc.cache_read_input_tokens += s.cache_read_input_tokens; acc.cache_creation_input_tokens += s.cache_creation_input_tokens;
-    return acc;
-  }, { calls: 0, cost: 0, unpriced_calls: 0, input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 });
-  const totalTokens = t.input_tokens + t.output_tokens + t.cache_read_input_tokens + t.cache_creation_input_tokens;
-  const cacheHit = (t.cache_read_input_tokens + t.input_tokens) > 0
-    ? (t.cache_read_input_tokens / (t.cache_read_input_tokens + t.input_tokens) * 100) : 0;
-
-  document.getElementById('stat-grid').innerHTML = `
-    <div class="stat"><div class="label">Cost</div><div class="value accent">${usd(t.cost)}</div></div>
-    <div class="stat"><div class="label">Tokens</div><div class="value">${fmt(totalTokens)}</div></div>
-    <div class="stat"><div class="label">Calls</div><div class="value">${fmt(t.calls)}</div></div>
-    <div class="stat"><div class="label">Sessions</div><div class="value">${fmt(sessions.length)}</div></div>
-    <div class="stat"><div class="label">Cache hit</div><div class="value">${cacheHit.toFixed(1)}%</div></div>
-  `;
-  document.getElementById('unpriced-note').innerHTML = t.unpriced_calls
-    ? `<div class="unpriced-note">${fmt(t.unpriced_calls)} call(s) used a model with no pricing entry — excluded from cost total.</div>` : '';
-
-  renderChart(sessions);
-
-  document.getElementById('by-model').innerHTML = rankRows(usageData.by_model, 'model', 'cost', usd);
-  document.getElementById('by-version').innerHTML = rankRows(usageData.by_version, 'version', 'cost', usd);
-  document.getElementById('by-subagent').innerHTML = rankRows(usageData.by_subagent, 'name', 'calls', fmt);
-  document.getElementById('by-skill').innerHTML = rankRows(usageData.by_skill, 'name', 'calls', fmt);
-
-  document.getElementById('sessions').innerHTML = sessions.map(s => `
-    <tr>
-      <td title="${esc(s.session_id)}">${esc(s.session_id.slice(0, 8))}</td>
-      <td>${s.timestamp ? new Date(s.timestamp).toLocaleString() : '?'}</td>
-      <td class="num">${fmt(s.calls)}</td>
-      <td class="num">${usd(s.cost)}</td>
-      <td class="num">${fmt(s.input_tokens)}</td>
-      <td class="num">${fmt(s.output_tokens)}</td>
-      <td class="num">${fmt(s.cache_read_input_tokens)}</td>
-      <td class="num">${fmt(s.cache_creation_input_tokens)}</td>
-      <td>${esc(s.version)}</td>
-    </tr>
-  `).join('');
-
-  document.getElementById('updated').textContent = 'updated ' + new Date(usageData.generated).toLocaleTimeString();
-}
-
-document.querySelectorAll('#tracker-subtabs .subtab').forEach(tab => {
-  tab.addEventListener('click', () => setTab('tracker', tab.dataset.sub, true));
-});
-
-const BOARD_COLUMNS = [
-  { key: 'idea', label: 'Idea', cls: '' },
-  { key: 'groomed', label: 'Groomed', cls: 'col-groomed' },
-  { key: 'progress', label: 'In Progress', cls: 'col-progress' },
-  { key: 'review', label: 'In Review', cls: 'col-review' },
-  { key: 'blocked', label: 'Blocked', cls: 'col-blocked' },
-  { key: 'done', label: 'Done', cls: 'col-done' },
-];
-function stageKey(status) {
-  const s = status.toLowerCase();
-  if (s.startsWith('in progress')) return 'progress';
-  if (s === 'in review') return 'review';
-  if (s === 'blocked') return 'blocked';
-  if (s === 'done') return 'done';
-  if (s === 'groomed') return 'groomed';
-  return 'idea';
-}
-const isDoneRow = r => stageKey(r.status) === 'done';
-const isActiveRow = r => ['progress', 'review'].includes(stageKey(r.status));
-
-function taskCardHtml(r) {
-  const ticket = r.ticket && r.ticket !== '—' ? `<span class="tag">${esc(r.ticket)}</span>` : '';
-  const phase = r.status.includes(':') ? `<span class="tag">${esc(r.status.split(':').slice(1).join(':').trim())}</span>` : '';
-  const milestone = r.milestone && r.milestone !== '—' ? `<div class="card-milestone">${esc(r.milestone)}</div>` : '';
-  return `<div class="task-card">
-    ${milestone}
-    <div class="slug">${esc(r.slug)}</div>
-    <div class="scope">${esc(r.scope)}</div>
-    <div class="foot">${ticket}${phase}</div>
-  </div>`;
-}
-
-function renderBoard(rows) {
-  document.getElementById('board').innerHTML = BOARD_COLUMNS.map(col => {
-    const items = rows.filter(r => stageKey(r.status) === col.key);
-    return `<div class="col ${col.cls}">
-      <h2>${col.label}<span>${items.length}</span></h2>
-      ${items.length ? items.map(taskCardHtml).join('') : '<div class="empty">—</div>'}
-    </div>`;
-  }).join('');
-}
-
-// progress ring: track + accent arc; center shows a check when done, else the station number
-function ring(pct, state, n) {
-  const r = 15, c = 2 * Math.PI * r, off = c * (1 - pct / 100);
-  const arc = state === 'done' ? 'var(--done)' : 'var(--accent)';
-  const center = state === 'done'
-    ? '<path d="M-5 0.5 L-1.5 4 L5.5 -4.5" fill="none" stroke="var(--done)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'
-    : `<text x="0" y="4" text-anchor="middle" font-size="12" font-weight="600" fill="currentColor">${n}</text>`;
-  return `<svg viewBox="-22 -22 44 44" width="40" height="40" aria-hidden="true">
-    <circle r="${r}" fill="none" stroke="var(--border)" stroke-width="3"/>
-    <circle r="${r}" fill="none" stroke="${arc}" stroke-width="3" stroke-linecap="round"
-      stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90)"/>
-    ${center}</svg>`;
-}
-
-function renderRoadmap(rows) {
-  const blocked = rows.filter(r => stageKey(r.status) === 'blocked');
-  const badge = document.getElementById('blocked-badge');
-  badge.classList.toggle('hidden', blocked.length === 0);
-  badge.textContent = `${blocked.length} blocked`;
-
-  // group by Milestone — a distinct axis from Status/Board: one milestone spans many statuses at once.
-  const groups = new Map();
-  const order = [];
-  for (const r of rows) {
-    const key = (r.milestone && r.milestone !== '—') ? r.milestone : 'Unsorted';
-    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
-    groups.get(key).push(r);
-  }
-  const stations = order.filter(k => k !== 'Unsorted');
-  if (groups.has('Unsorted')) stations.push('Unsorted');
-
-  if (!stations.length) {
-    document.getElementById('road').innerHTML = '<div class="empty">No tasks tracked yet.</div>';
-    return;
-  }
-
-  const info = stations.map(name => {
-    const items = groups.get(name);
-    const done = items.filter(isDoneRow).length;
-    const state = done === items.length ? 'done' : (done > 0 || items.some(isActiveRow)) ? 'active' : 'upcoming';
-    return { name, items, done, state };
-  });
-  let lastReached = -1;
-  info.forEach((x, i) => { if (x.state !== 'upcoming') lastReached = i; });
-
-  document.getElementById('road').innerHTML = info.map((x, i) => {
-    const pct = x.items.length ? Math.round(x.done / x.items.length * 100) : 0;
-    const label = x.state === 'done' ? 'Done' : x.state === 'active' ? 'In progress' : 'Upcoming';
-    return `<div class="rstation ${i <= lastReached ? 'filled' : ''}">
-      <div class="rnoderow"><div class="rnode">${ring(pct, x.state, i + 1)}</div></div>
-      <div class="rbody">
-        <div class="rname">${esc(x.name)}<span class="rcount">${x.done}/${x.items.length} · ${label}</span></div>
-        ${x.items.map(r => `<div class="icard${isDoneRow(r) ? ' is-done' : ''}">${esc(r.slug)} — ${esc(r.scope)}</div>`).join('')}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function refreshTracker() {
-  const res = await fetch('/api/tracker');
-  const rows = await res.json();
-  const hasRows = rows.length > 0;
-  document.getElementById('tracker-empty').style.display = hasRows ? 'none' : 'block';
-  document.getElementById('tracker-subtabs').classList.toggle('hidden', !hasRows);
-  const boardActive = document.querySelector('#tracker-subtabs .subtab.active').dataset.sub === 'board';
-  document.getElementById('board').classList.toggle('hidden', !hasRows || !boardActive);
-  document.getElementById('road-wrap').classList.toggle('hidden', !hasRows || boardActive);
-  renderBoard(rows);
-  renderRoadmap(rows);
-}
-
-async function refresh() {
-  const res = await fetch('/api/usage');
-  usageData = await res.json();
-  render();
-  await refreshTracker();
-}
-
-setTab(...tabFromHash(), false);
-refresh();
-setInterval(refresh, 4000);
-</script>
-</body>
-</html>
-"""
+def serve_static(dist_dir: Path, request_path: str):
+    """Resolve a static asset under dist_dir, falling back to index.html for
+    the SPA root/any client-side route. None if dist_dir/index.html itself
+    doesn't exist (submodule not initialized)."""
+    index = dist_dir / "index.html"
+    if not index.exists():
+        return None
+    rel = request_path.lstrip("/")
+    candidate = (dist_dir / rel) if rel else index
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(dist_dir.resolve())
+    except (ValueError, OSError):
+        candidate = index
+    else:
+        if not resolved.is_file():
+            candidate = index
+    content_type = mimetypes.guess_type(str(candidate))[0] or "application/octet-stream"
+    return content_type, candidate.read_bytes()
 
 
 def make_handler(cwd: str, projects_root: Path):
@@ -947,19 +522,32 @@ def make_handler(cwd: str, projects_root: Path):
             self.wfile.write(body_bytes)
 
         def do_GET(self):
-            if self.path == "/":
-                self._send(200, "text/html; charset=utf-8", PAGE_HTML)
-            elif self.path == "/api/usage":
-                data = aggregate_usage(cwd, projects_root)
-                self._send(200, "application/json", json.dumps(data))
-            elif self.path == "/api/tracker":
-                rows = parse_tracker_md(Path(cwd) / "docs" / ".tasks" / "TRACKER.md")
-                self._send(200, "application/json", json.dumps(rows))
-            elif self.path == "/api/swarms":
-                swarms = discover_swarms(cwd)
-                self._send(200, "application/json", json.dumps(swarms))
-            else:
-                self._send(404, "text/plain", "not found")
+            if self.path.startswith("/api/"):
+                if self.path == "/api/usage":
+                    data = aggregate_usage(cwd, projects_root)
+                    self._send(200, "application/json", json.dumps(data))
+                elif self.path == "/api/tracker":
+                    rows = parse_tracker_md(Path(cwd) / "docs" / ".tasks" / "TRACKER.md")
+                    self._send(200, "application/json", json.dumps(rows))
+                elif self.path == "/api/swarms":
+                    swarms = discover_swarms(cwd)
+                    self._send(200, "application/json", json.dumps(swarms))
+                else:
+                    self._send(404, "text/plain", "not found")
+                return
+            result = serve_static(Path(cwd) / "dashboard" / "dist", self.path)
+            if result is None:
+                self._send(
+                    500, "text/plain",
+                    "dashboard/dist/ not found. Run: git submodule update --init dashboard",
+                )
+                return
+            content_type, body = result
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def log_message(self, format, *args):
             pass

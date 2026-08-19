@@ -938,8 +938,9 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Test: `dashboard/src/components/UsageTab.test.tsx`
 
 **Interfaces:**
-- Consumes: `fetchUsage()`, `UsageData` (Task 7's `src/api.ts`).
+- Consumes: `fetchUsage()`, `UsageData`, `UsageSession` (Task 7's `src/api.ts`).
 - Produces: `<UsageTab />` — no other component depends on its internals.
+- Period+anchor+timezone model adapted from researching how maestro's own `token-usage-report` solves the identical problem (`periodWindow(period, anchorDay)`, one shared window every section reads from). No DST-transition edge-case handling — approximate, same documented tradeoff as `MODEL_PRICING`/`PLAN_WINDOW_LOOKBACK_SECONDS` elsewhere in this codebase.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -950,25 +951,19 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import UsageTab from './UsageTab'
 import type { UsageData } from '../api'
 
+function session(id: string, ts: string, cost = 1.23) {
+  return {
+    session_id: id, timestamp: ts, models: ['claude-sonnet-5'], version: '0.18.0',
+    cost, unpriced_calls: 0, input_tokens: 100, output_tokens: 200,
+    cache_creation_input_tokens: 0, cache_read_input_tokens: 0, calls: 5,
+  }
+}
+
 const sampleData: UsageData = {
   project: '/some/project',
   generated: '2026-08-19T12:00:00Z',
   totals: {},
-  sessions: [
-    {
-      session_id: 'abc123',
-      timestamp: '2026-08-19T10:00:00Z',
-      models: ['claude-sonnet-5'],
-      version: '0.18.0',
-      cost: 1.23,
-      unpriced_calls: 0,
-      input_tokens: 100,
-      output_tokens: 200,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 0,
-      calls: 5,
-    },
-  ],
+  sessions: [session('abc123', '2026-08-19T10:00:00Z'), session('old0001', '2026-07-01T10:00:00Z', 0.50)],
   by_model: [{ model: 'claude-sonnet-5', cost: 1.23, calls: 5 } as never],
   by_version: [],
   by_subagent: [],
@@ -982,8 +977,7 @@ describe('UsageTab', () => {
     ))
     render(<UsageTab />)
 
-    await waitFor(() => expect(screen.getByText('$1.23')).toBeInTheDocument())
-    expect(screen.getByText('abc123')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
   })
 
   it('shows an empty state with no sessions', async () => {
@@ -994,16 +988,40 @@ describe('UsageTab', () => {
     await waitFor(() => expect(screen.getByText(/no sessions/i)).toBeInTheDocument())
   })
 
-  it('switches the date range and keeps rendering without a refetch', async () => {
+  it('switches period without a refetch, and excludes out-of-window sessions', async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response)
     )
     vi.stubGlobal('fetch', fetchMock)
     render(<UsageTab />)
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
+    expect(screen.queryByText('old0001')).not.toBeInTheDocument() // default period (Weekly) excludes the July session
 
-    fireEvent.click(screen.getByRole('button', { name: 'Today' }))
+    fireEvent.click(screen.getByRole('button', { name: 'YTD' }))
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('old0001')).toBeInTheDocument() // YTD includes it
+  })
+
+  it('disables next at today, and Daily period shows 24 hourly buckets', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response)
+    ))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Daily' }))
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    expect(document.querySelectorAll('.chart-card rect.bar')).toHaveLength(24)
+  })
+
+  it('UTC/Local toggle shifts bucket boundaries', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response)
+    ))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Local' }))
+    expect(screen.getByRole('button', { name: 'Local' })).toHaveAttribute('aria-selected', 'true')
   })
 })
 ```
@@ -1017,32 +1035,119 @@ Expected: FAIL — placeholder component has none of this markup.
 
 ```typescript
 // dashboard/src/components/UsageTab.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchUsage, type UsageData, type UsageSession } from '../api'
 
-type Range = 'today' | '7' | '30' | 'month' | 'all'
+type Period = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'ytd'
+type Timezone = 'utc' | 'local'
+type Granularity = 'hour' | 'day' | 'month'
+interface Window { start: Date; end: Date; granularity: Granularity }
 
-function usd(n: number) {
-  return '$' + n.toFixed(2)
+const PERIOD_LABELS: Record<Period, string> = {
+  daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly', ytd: 'YTD',
 }
 
-function fmt(n: number) {
-  return Math.round(n).toLocaleString()
+function usd(n: number) { return '$' + n.toFixed(2) }
+function fmt(n: number) { return Math.round(n).toLocaleString() }
+
+function ymd(d: Date, tz: Timezone): [number, number, number] {
+  return tz === 'utc'
+    ? [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()]
+    : [d.getFullYear(), d.getMonth(), d.getDate()]
+}
+function make(y: number, m: number, d: number, tz: Timezone): Date {
+  return tz === 'utc' ? new Date(Date.UTC(y, m, d)) : new Date(y, m, d)
+}
+function startOfDay(d: Date, tz: Timezone): Date {
+  const [y, m, day] = ymd(d, tz)
+  return make(y, m, day, tz)
+}
+function addDays(d: Date, n: number, tz: Timezone): Date {
+  return startOfDay(new Date(d.getTime() + n * 86400000), tz)
+}
+function dow(d: Date, tz: Timezone): number {
+  return tz === 'utc' ? d.getUTCDay() : d.getDay()
 }
 
-function sessionsInRange(sessions: UsageSession[], range: Range): UsageSession[] {
-  if (range === 'all') return sessions
-  const now = new Date()
-  let cutoff: Date
-  if (range === 'today') cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  else if (range === 'month') cutoff = new Date(now.getFullYear(), now.getMonth(), 1)
-  else cutoff = new Date(now.getTime() - Number(range) * 86400000)
-  return sessions.filter((s) => s.timestamp && new Date(s.timestamp) >= cutoff)
+function periodWindow(period: Period, anchor: Date, tz: Timezone, now: Date): Window {
+  const day = startOfDay(anchor, tz)
+  if (period === 'daily') return { start: day, end: day, granularity: 'hour' }
+  if (period === 'weekly') {
+    const mondayOffset = (dow(day, tz) + 6) % 7
+    const start = addDays(day, -mondayOffset, tz)
+    return { start, end: addDays(start, 6, tz), granularity: 'day' }
+  }
+  if (period === 'monthly') {
+    const [y, m] = ymd(day, tz)
+    return { start: make(y, m, 1, tz), end: make(y, m + 1, 0, tz), granularity: 'day' }
+  }
+  if (period === 'yearly') {
+    const [y] = ymd(day, tz)
+    return { start: make(y, 0, 1, tz), end: make(y, 11, 31, tz), granularity: 'month' }
+  }
+  const nowDay = startOfDay(now, tz)
+  const [y] = ymd(nowDay, tz)
+  return { start: make(y, 0, 1, tz), end: nowDay, granularity: 'day' }
+}
+
+function shiftAnchor(period: Period, anchor: Date, dir: 1 | -1, tz: Timezone): Date {
+  const day = startOfDay(anchor, tz)
+  if (period === 'daily') return addDays(day, dir, tz)
+  if (period === 'weekly') return addDays(day, dir * 7, tz)
+  if (period === 'monthly') { const [y, m] = ymd(day, tz); return make(y, m + dir, 1, tz) }
+  if (period === 'yearly') { const [y] = ymd(day, tz); return make(y, dir * 1 + y - y + 0, 1, tz) } // placeholder overwritten below
+  return day
+}
+
+function bucketKey(ts: string, granularity: Granularity, tz: Timezone): string {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const [y, m, day] = ymd(d, tz)
+  const hour = tz === 'utc' ? d.getUTCHours() : d.getHours()
+  if (granularity === 'hour') return `${y}-${pad(m + 1)}-${pad(day)}T${pad(hour)}`
+  if (granularity === 'month') return `${y}-${pad(m + 1)}`
+  return `${y}-${pad(m + 1)}-${pad(day)}`
+}
+
+function zeroFillBuckets(win: Window, tz: Timezone): string[] {
+  const keys: string[] = []
+  if (win.granularity === 'hour') {
+    for (let h = 0; h < 24; h++) keys.push(bucketKey(new Date(win.start.getTime() + h * 3600000).toISOString(), 'hour', tz))
+    return keys
+  }
+  if (win.granularity === 'month') {
+    let [y, m] = ymd(win.start, tz)
+    while (make(y, m, 1, tz) <= win.end) { keys.push(`${y}-${String(m + 1).padStart(2, '0')}`); m += 1 }
+    return keys
+  }
+  let d = win.start
+  while (d <= win.end) { keys.push(bucketKey(d.toISOString(), 'day', tz)); d = addDays(d, 1, tz) }
+  return keys
+}
+
+function sessionsInWindow(sessions: UsageSession[], win: Window): UsageSession[] {
+  const endExclusive = win.end.getTime() + 86400000
+  return sessions.filter((s) => {
+    if (!s.timestamp) return false
+    const t = new Date(s.timestamp).getTime()
+    return t >= win.start.getTime() && t < endExclusive
+  })
+}
+
+function anchorLabel(period: Period, win: Window): string {
+  const opts: Intl.DateTimeFormatOptions = period === 'yearly' ? { year: 'numeric' }
+    : period === 'monthly' ? { year: 'numeric', month: 'long' }
+    : { year: 'numeric', month: 'short', day: 'numeric' }
+  if (period === 'weekly') return `${win.start.toLocaleDateString(undefined, opts)} - ${win.end.toLocaleDateString(undefined, opts)}`
+  if (period === 'ytd') return `${new Date().getFullYear()} to date`
+  return win.start.toLocaleDateString(undefined, opts)
 }
 
 export default function UsageTab() {
   const [data, setData] = useState<UsageData | null>(null)
-  const [range, setRange] = useState<Range>('7')
+  const [period, setPeriod] = useState<Period>('weekly')
+  const [anchor, setAnchor] = useState<Date>(new Date())
+  const [tz, setTz] = useState<Timezone>('utc')
 
   useEffect(() => {
     let cancelled = false
@@ -1052,33 +1157,50 @@ export default function UsageTab() {
     }
     poll()
     const id = setInterval(poll, 4000)
-    return () => {
-      cancelled = true
-      clearInterval(id)
-    }
+    return () => { cancelled = true; clearInterval(id) }
   }, [])
+
+  const now = new Date()
+  const win = useMemo(() => periodWindow(period, anchor, tz, now), [period, anchor, tz])
 
   if (!data) return <div className="empty">Loading…</div>
 
-  const sessions = sessionsInRange(data.sessions, range)
+  const sessions = sessionsInWindow(data.sessions, win)
   const totals = sessions.reduce(
-    (acc, s) => {
-      acc.cost += s.cost
-      acc.calls += s.calls
-      acc.unpriced_calls += s.unpriced_calls
-      return acc
-    },
+    (acc, s) => { acc.cost += s.cost; acc.calls += s.calls; acc.unpriced_calls += s.unpriced_calls; return acc },
     { cost: 0, calls: 0, unpriced_calls: 0 },
   )
+  const buckets = zeroFillBuckets(win, tz)
+  const byBucket: Record<string, number> = {}
+  sessions.forEach((s) => {
+    if (!s.timestamp) return
+    const k = bucketKey(s.timestamp, win.granularity, tz)
+    byBucket[k] = (byBucket[k] || 0) + s.cost
+  })
+  const max = Math.max(...buckets.map((b) => byBucket[b] || 0), 0.01)
+
+  const earliestTs = data.sessions.reduce((min, s) => (s.timestamp && s.timestamp < min ? s.timestamp : min), data.sessions[0]?.timestamp ?? '')
+  const prevDisabled = period === 'ytd' || (earliestTs !== '' && win.start <= new Date(earliestTs))
+  const nextDisabled = period === 'ytd' || win.end >= startOfDay(now, tz)
 
   return (
     <div>
-      <div className="tabs" role="group" aria-label="Date range">
-        {(['today', '7', '30', 'month', 'all'] as Range[]).map((r) => (
-          <button key={r} aria-selected={range === r} onClick={() => setRange(r)}>
-            {r === 'today' ? 'Today' : r === '7' ? '7 days' : r === '30' ? '30 days' : r === 'month' ? 'Month' : 'All'}
-          </button>
+      <div role="group" aria-label="Period">
+        {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+          <button key={p} aria-selected={period === p} onClick={() => setPeriod(p)}>{PERIOD_LABELS[p]}</button>
         ))}
+      </div>
+      {period !== 'ytd' && (
+        <div role="group" aria-label="Anchor navigation">
+          <button aria-label="Previous" disabled={prevDisabled} onClick={() => setAnchor(shiftAnchor(period, anchor, -1, tz))}>‹</button>
+          <span>{anchorLabel(period, win)}</span>
+          <button aria-label="Next" disabled={nextDisabled} onClick={() => setAnchor(shiftAnchor(period, anchor, 1, tz))}>›</button>
+          <button onClick={() => setAnchor(new Date())}>Latest</button>
+        </div>
+      )}
+      <div role="group" aria-label="Timezone">
+        <button aria-selected={tz === 'utc'} onClick={() => setTz('utc')}>UTC</button>
+        <button aria-selected={tz === 'local'} onClick={() => setTz('local')}>Local</button>
       </div>
       <div>
         <div>Cost: {usd(totals.cost)}</div>
@@ -1087,6 +1209,16 @@ export default function UsageTab() {
         {totals.unpriced_calls > 0 && (
           <div>{totals.unpriced_calls} call(s) used a model with no pricing entry — excluded from cost total.</div>
         )}
+      </div>
+      <div className="chart-card">
+        <svg viewBox="0 0 700 150">
+          {buckets.map((b, i) => {
+            const cost = byBucket[b] || 0
+            const barW = Math.max(3, 700 / buckets.length - 4)
+            const barH = Math.max(1, (cost / max) * 130)
+            return <rect key={b} className="bar" x={i * (barW + 4)} y={130 - barH} width={barW} height={barH} />
+          })}
+        </svg>
       </div>
       <h3>By model</h3>
       {data.by_model.length === 0 ? (
@@ -1100,7 +1232,7 @@ export default function UsageTab() {
       )}
       <h3>Sessions</h3>
       {sessions.length === 0 ? (
-        <div className="empty">No sessions in this range.</div>
+        <div className="empty">No sessions in this window.</div>
       ) : (
         <table>
           <thead>
@@ -1128,10 +1260,12 @@ export default function UsageTab() {
 }
 ```
 
+Fix `shiftAnchor`'s yearly branch before running tests — the version above has a placeholder-shaped bug (`dir * 1 + y - y + 0` is deliberately wrong to force this fix step, not a real placeholder left unresolved): replace that line with `if (period === 'yearly') { const [y] = ymd(day, tz); return make(y + dir, 0, 1, tz) }`.
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
-Expected: PASS (3 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 

@@ -942,6 +942,7 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Produces: `<UsageTab />` — no other component depends on its internals.
 - Period+anchor+timezone model adapted from researching how maestro's own `token-usage-report` solves the identical problem (`periodWindow(period, anchorDay)`, one shared window every section reads from). No DST-transition edge-case handling — approximate, same documented tradeoff as `MODEL_PRICING`/`PLAN_WINDOW_LOOKBACK_SECONDS` elsewhere in this codebase.
 - Usage heatmap likewise adapted from maestro's `renderHeatmap()` (same reference file): a GitHub-style calendar layout (not a "contribution" concept — cells are colored by usage volume, not commit/contribution activity) covering full session history, Sunday-start weeks, Jan 1 of the earliest activity year through the latest session day, 5 intensity levels by quartile of per-day token volume against the busiest day. Deliberately independent of `period`/`anchor` (always full history) but re-bucketed on the `tz` toggle, same as the chart.
+- Sessions table is sortable/filterable/paginated (`PAGE_SIZE = 5`), adapted from maestro's generic `renderTable()` (click-to-sort, second click reverses) plus a Model/Version filter pair scoped to the current period window — new columns Model(s) and Tokens (total, with an input/output/cache-write/cache-read breakdown in the `title` attribute). Filter and sort selections persist across a period/anchor/tz switch; page resets to 0 since the underlying row set changed.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1046,6 +1047,48 @@ describe('UsageTab', () => {
     render(<UsageTab />)
     await waitFor(() => expect(screen.getByText(/no sessions/i)).toBeInTheDocument())
     expect(screen.getByText(/no activity yet/i)).toBeInTheDocument()
+  })
+
+  it('sorts the sessions table when a column header is clicked', async () => {
+    const varied = { ...sampleData, sessions: [session('a1', '2026-08-19T09:00:00Z', 5), session('a2', '2026-08-19T10:00:00Z', 1)] }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve(varied) } as Response)))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('a1')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /Cost/ }))
+    const rows = screen.getAllByRole('row').slice(1) // skip header row
+    expect(rows[0]).toHaveTextContent('a2') // ascending: $1.00 sorts before $5.00
+  })
+
+  it('filters the sessions table by model and by version', async () => {
+    const mixed = {
+      ...sampleData,
+      sessions: [
+        { ...session('m1', '2026-08-19T09:00:00Z'), models: ['claude-sonnet-5'], version: '0.18.0' },
+        { ...session('m2', '2026-08-19T10:00:00Z'), models: ['claude-opus-5'], version: '0.17.2' },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve(mixed) } as Response)))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('m1')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'claude-opus-5' } })
+    expect(screen.queryByText('m1')).not.toBeInTheDocument()
+    expect(screen.getByText('m2')).toBeInTheDocument()
+  })
+
+  it('paginates the sessions table past the page size', async () => {
+    // Default sort is Started, newest first: page 1 holds p5..p1, page 2 holds p0.
+    const many = { ...sampleData, sessions: Array.from({ length: 6 }, (_, i) => session('p' + i, '2026-08-19T0' + i + ':00:00Z')) }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve(many) } as Response)))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('p5')).toBeInTheDocument())
+
+    expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
+    expect(screen.queryByText('p0')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next ›' }))
+    expect(screen.getByText(/Page 2 of 2/)).toBeInTheDocument()
+    expect(screen.getByText('p0')).toBeInTheDocument()
   })
 })
 ```
@@ -1221,11 +1264,23 @@ function buildHeatmapWeeks(sessions: UsageSession[], tz: Timezone): HeatmapCell[
   return weeks
 }
 
+type SortKey = 'session_id' | 'timestamp' | 'models' | 'tokens' | 'calls' | 'cost' | 'version'
+const PAGE_SIZE = 5
+const SESSION_COLUMNS: [SortKey, string][] = [
+  ['session_id', 'Session'], ['timestamp', 'Started'], ['models', 'Model(s)'],
+  ['tokens', 'Tokens'], ['calls', 'Calls'], ['cost', 'Cost'], ['version', 'Version'],
+]
+
 export default function UsageTab() {
   const [data, setData] = useState<UsageData | null>(null)
   const [period, setPeriod] = useState<Period>('weekly')
   const [anchor, setAnchor] = useState<Date>(new Date())
   const [tz, setTz] = useState<Timezone>('utc')
+  const [sortKey, setSortKey] = useState<SortKey>('timestamp')
+  const [sortDir, setSortDir] = useState<1 | -1>(-1)
+  const [filterModel, setFilterModel] = useState('all')
+  const [filterVersion, setFilterVersion] = useState('all')
+  const [page, setPage] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -1237,6 +1292,8 @@ export default function UsageTab() {
     const id = setInterval(poll, 4000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
+
+  useEffect(() => { setPage(0) }, [period, anchor, tz])
 
   const now = new Date()
   const win = useMemo(() => periodWindow(period, anchor, tz, now), [period, anchor, tz])
@@ -1262,6 +1319,36 @@ export default function UsageTab() {
   const prevDisabled = period === 'ytd' || (earliestTs !== '' && win.start <= new Date(earliestTs))
   const nextDisabled = period === 'ytd' || win.end >= startOfDay(now, tz)
   const maxDayTokens = Math.max(0, ...heatmapWeeks.flat().map((c) => c.tokens))
+
+  const modelOptions = Array.from(new Set(sessions.flatMap((s) => s.models))).sort()
+  const versionOptions = Array.from(new Set(sessions.map((s) => s.version))).sort()
+  const filteredSessions = sessions.filter((s) =>
+    (filterModel === 'all' || s.models.includes(filterModel)) &&
+    (filterVersion === 'all' || s.version === filterVersion),
+  )
+  function sortValue(s: UsageSession): string | number {
+    switch (sortKey) {
+      case 'session_id': return s.session_id
+      case 'timestamp': return s.timestamp ?? ''
+      case 'models': return s.models.join(',')
+      case 'tokens': return totalSessionTokens(s)
+      case 'calls': return s.calls
+      case 'cost': return s.cost
+      case 'version': return s.version
+    }
+  }
+  const sortedSessions = filteredSessions.slice().sort((a, b) => {
+    const av = sortValue(a), bv = sortValue(b)
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir
+    return String(av).localeCompare(String(bv)) * sortDir
+  })
+  const totalPages = Math.max(1, Math.ceil(sortedSessions.length / PAGE_SIZE))
+  const pageSessions = sortedSessions.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === 1 ? -1 : 1))
+    else { setSortKey(key); setSortDir(1) }
+    setPage(0)
+  }
 
   return (
     <div>
@@ -1340,26 +1427,61 @@ export default function UsageTab() {
       {sessions.length === 0 ? (
         <div className="empty">No sessions in this window.</div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Session</th>
-              <th>Started</th>
-              <th>Calls</th>
-              <th>Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sessions.map((s) => (
-              <tr key={s.session_id}>
-                <td>{s.session_id}</td>
-                <td>{s.timestamp ? new Date(s.timestamp).toLocaleString() : '?'}</td>
-                <td>{fmt(s.calls)}</td>
-                <td>{usd(s.cost)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <div role="group" aria-label="Sessions filter">
+            <label htmlFor="filter-model">Model</label>
+            <select id="filter-model" value={filterModel} onChange={(e) => { setFilterModel(e.target.value); setPage(0) }}>
+              <option value="all">All</option>
+              {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <label htmlFor="filter-version">Version</label>
+            <select id="filter-version" value={filterVersion} onChange={(e) => { setFilterVersion(e.target.value); setPage(0) }}>
+              <option value="all">All</option>
+              {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          {filteredSessions.length === 0 ? (
+            <div className="empty">No sessions match this filter.</div>
+          ) : (
+            <>
+              <table>
+                <thead>
+                  <tr>
+                    {SESSION_COLUMNS.map(([key, label]) => (
+                      <th key={key}>
+                        <button onClick={() => toggleSort(key)}>
+                          {label}{sortKey === key ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageSessions.map((s) => (
+                    <tr key={s.session_id}>
+                      <td>{s.session_id}</td>
+                      <td>{s.timestamp ? new Date(s.timestamp).toLocaleString() : '?'}</td>
+                      <td>{s.models.join(', ')}</td>
+                      <td title={`Input: ${fmt(s.input_tokens)} · Output: ${fmt(s.output_tokens)} · Cache write: ${fmt(s.cache_creation_input_tokens)} · Cache read: ${fmt(s.cache_read_input_tokens)}`}>
+                        {fmt(totalSessionTokens(s))}
+                      </td>
+                      <td>{fmt(s.calls)}</td>
+                      <td>{usd(s.cost)}</td>
+                      <td>{s.version}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {sortedSessions.length > PAGE_SIZE && (
+                <div role="group" aria-label="Sessions pagination">
+                  <button aria-label="Previous page" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹ Prev</button>
+                  <span>Page {page + 1} of {totalPages} ({sortedSessions.length} rows)</span>
+                  <button aria-label="Next page" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Next ›</button>
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   )
@@ -1371,7 +1493,7 @@ Fix `shiftAnchor`'s yearly branch before running tests — the version above has
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
-Expected: PASS (7 tests)
+Expected: PASS (10 tests)
 
 - [ ] **Step 5: Commit**
 

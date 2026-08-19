@@ -63,6 +63,15 @@ if [ -n "$OUT5" ]; then
   FAIL=1
 fi
 
+# Case 6: raw plan path containing a double-quote -> still emits valid JSON
+# (regression test: the hook used to build its JSON via raw printf string
+# interpolation, so an unescaped " in the path broke the JSON output)
+OUT6="$(run_hook '/goal docs/.plans/weird".md')"
+if ! echo "$OUT6" | jq . >/dev/null 2>&1; then
+  echo "FAIL case 6: expected valid JSON output for a path containing '\"', got: $OUT6"
+  FAIL=1
+fi
+
 if [ "$FAIL" -eq 0 ]; then
   echo "PASS: test_goal_guard"
   exit 0

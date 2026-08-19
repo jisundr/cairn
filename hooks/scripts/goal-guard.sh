@@ -39,4 +39,4 @@ else
 fi
 
 context="/goal sets a completion condition for autonomous looping -- it does not execute a plan. ${path} looks like a raw implementation plan, not a goal condition.${hint}"
-printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' "$context"
+jq -n --arg ctx "$context" '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$ctx}}'

@@ -955,6 +955,9 @@ def make_handler(cwd: str, projects_root: Path):
             elif self.path == "/api/tracker":
                 rows = parse_tracker_md(Path(cwd) / "docs" / ".tasks" / "TRACKER.md")
                 self._send(200, "application/json", json.dumps(rows))
+            elif self.path == "/api/swarms":
+                swarms = discover_swarms(cwd)
+                self._send(200, "application/json", json.dumps(swarms))
             else:
                 self._send(404, "text/plain", "not found")
 

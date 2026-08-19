@@ -139,6 +139,19 @@ def _tmux_has_session(branch: str) -> bool | None:
     return result.returncode == 0
 
 
+def _tmux_pane_tail(branch: str, lines: int = 20) -> list | None:
+    try:
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", branch, "-p"], capture_output=True, timeout=5
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    text = result.stdout.decode("utf-8", errors="replace")
+    return text.splitlines()[-lines:]
+
+
 def discover_swarms(cwd: str) -> list:
     """Mode: Unattended tasks under docs/.tasks/*/STATE.md, with tmux liveness."""
     swarms = []
@@ -148,9 +161,12 @@ def discover_swarms(cwd: str) -> list:
             continue
         history = parse_history_md(task_dir / "HISTORY.md")
         branch = state.get("branch", "")
+        tmux_alive = _tmux_has_session(branch) if branch else None
+        phase = state.get("phase", "")
+        pane_tail = _tmux_pane_tail(branch) if (phase == "HANDOFF NEEDED" and tmux_alive) else None
         swarms.append({
             "slug": task_dir.name,
-            "phase": state.get("phase", ""),
+            "phase": phase,
             "status": state.get("status", ""),
             "handoff_to": state.get("handoff_to", ""),
             "worktree": state.get("worktree", ""),
@@ -159,7 +175,8 @@ def discover_swarms(cwd: str) -> list:
             "last_history": history[-1] if history else None,
             "recent_history": list(reversed(history[-5:])),
             "history_count": len(history),
-            "tmux_alive": _tmux_has_session(branch) if branch else None,
+            "tmux_alive": tmux_alive,
+            "pane_tail": pane_tail,
         })
     return swarms
 

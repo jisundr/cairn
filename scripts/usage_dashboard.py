@@ -484,15 +484,22 @@ def aggregate_usage(cwd: str, projects_root: Path) -> dict:
             version_row[field] += session[field]
         version_row["cost"] += session["cost"]
 
-        for model, stats in session.pop("_model_stats").items():
+        model_stats = session.pop("_model_stats")
+        subagent_calls = session.pop("_subagent_calls")
+        skill_calls = session.pop("_skill_calls")
+        session["model_costs"] = {m: s["cost"] for m, s in model_stats.items()}
+        session["subagents"] = subagent_calls
+        session["skills"] = skill_calls
+
+        for model, stats in model_stats.items():
             row = by_model.setdefault(model, _empty_usage() | {"cost": 0.0})
             for field in (*USAGE_FIELDS, "calls"):
                 row[field] += stats[field]
             row["cost"] += stats["cost"]
 
-        for name, calls in session.pop("_subagent_calls").items():
+        for name, calls in subagent_calls.items():
             by_subagent[name] = by_subagent.get(name, 0) + calls
-        for name, calls in session.pop("_skill_calls").items():
+        for name, calls in skill_calls.items():
             by_skill[name] = by_skill.get(name, 0) + calls
 
     return {

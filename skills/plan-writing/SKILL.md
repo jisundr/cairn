@@ -17,18 +17,18 @@ Follow the loaded `superpowers:writing-plans` skill exactly, with one substituti
 
 If the plan references an upstream spec, expect it at `docs/.specs/` (`cairn:spec-writing`'s output path), not the vendor default.
 
-After the plan is written, `superpowers:writing-plans` hands off to `superpowers:executing-plans` — that handoff is unchanged; `executing-plans` reads whatever plan path it is given, so no override is needed there.
+`superpowers:writing-plans` itself ends by offering a choice between its own Subagent-Driven/Inline execution modes, the latter via `superpowers:executing-plans` — Override 2's Step 0 below supersedes that offer entirely: every plan produced through this wrapper routes to either `task-orchestrator` Plan Mode (Chain flow) or Direct flow's own entry point, never to `executing-plans` directly. No path override is needed for `executing-plans` itself (it reads whatever plan path it's given), but this wrapper never actually reaches it.
 
-## Override 2: optional goal-file authoring
+## Override 2: complexity check + optional goal-file authoring
 
-After `superpowers:writing-plans` completes its own flow (plan written, reviewed, ready to hand off to `executing-plans`), run one more step before that hand-off: offer to draft a `/goal` completion condition for the plan just written.
+After `superpowers:writing-plans` completes its own flow (plan written, reviewed), run two more steps before any further hand-off: first, a complexity check that can route the plan to `task-orchestrator` Plan Mode outright (Step 0); only when it doesn't, an offer to draft a `/goal` completion condition for the plan (Steps 1–7), before Step 8 hands off to wherever Step 0 decided.
 
 `/goal` is a built-in Claude Code slash command, not a marketplace skill — it is not invocable via the `Skill` tool. This step never invokes it; it drafts and persists the condition, then prints the exact manual command for the user to run themselves.
 
-0. **Complexity check.** Read the plan's `### Task N:` blocks and their **Files** sections. If any task's `Modify: <path>` entry changes an *existing* file's current behavior (not just an appended paragraph/bullet — an edit to existing agent process steps, an existing skill's methodology, or similar), present via `AskUserQuestion`: *"This plan changes existing behavior — recommend running it through the coding chain (`task-orchestrator`) instead of a `/goal` loop, for independent verification. Route through Chain flow, or continue with `/goal`-file drafting?"* — citing which task/file drove the recommendation. This is a judgment call reading the plan, not a mechanical count of `Modify:` lines — the same kind of distinction `qa-auditor` already draws between an added/modified line and a pre-existing one.
-   - **Chain flow chosen:** skip the rest of this section entirely — a `/goal` file has no role once Chain flow is running its own Attended/Unattended machinery. Hand off to `task-orchestrator` Plan Mode with the plan's slug instead of the `executing-plans` hand-off in Step 8 below.
-   - **Continue with `/goal` chosen, or the plan is purely additive** (every task is `Create:`, or `Modify:` is append-only with no behavior change) — no question needed in the additive case, proceed straight to Step 1 below, unchanged.
-1. **Offer.** One `AskUserQuestion`: "Draft a `/goal` completion condition for this plan too, so you can run it unattended?" On decline, proceed straight to the existing `executing-plans` hand-off — nothing else in this section applies.
+0. **Complexity check.** Read the plan's `### Task N:` blocks and their **Files** sections. If any task's `Modify: <path>` entry changes an *existing* file's current behavior (not just an appended paragraph/bullet — an edit to existing agent process steps, an existing skill's methodology, or similar), present via `AskUserQuestion`: *"This plan changes existing behavior — recommend running it through the coding chain (`task-orchestrator`) instead, for independent verification. Route through Chain flow, or proceed with Direct flow anyway?"* — citing which task/file drove the recommendation. If every task is `Create:` (new files) or purely additive `Modify:` (append-only, no behavior change), no question needed — Direct flow is the default outcome, same as this heuristic recommended before it moved here. This is a judgment call reading the plan, not a mechanical count of `Modify:` lines — the same kind of distinction `qa-auditor` already draws between an added/modified line and a pre-existing one.
+   - **Chain flow chosen:** skip the rest of this section entirely, including Step 1's `/goal` offer — a `/goal` file has no role once Chain flow is running its own Attended/Unattended machinery. Hand off to `task-orchestrator` Plan Mode with the plan's slug instead of the `executing-plans` hand-off in Step 8 below.
+   - **Direct flow chosen (or the default for a purely additive plan):** proceed to Step 1 below. Step 8's hand-off changes too: not to `executing-plans` (which has no submodule/chain awareness at all — the exact gap `docs/.specs/2026-08-19-coding-chain-multi-repo-safety-design.md` exists to close), but to Direct flow's own entry per `CLAUDE.md`'s Direct-flow section — the invoking session's Lightweight Start ask still happens there, right before `software-engineer` (Direct Mode) is actually dispatched, same as it always has. The `/goal` offer below is an optional layer on top of that dispatch, not a replacement for it.
+1. **Offer.** One `AskUserQuestion`: "Draft a `/goal` completion condition for this plan too, so you can run it unattended?" On decline, proceed straight to Step 8's hand-off — nothing else in this section applies.
 2. **Pre-fill.** Read the plan's own acceptance-criteria/testing sections (the review checkpoints `writing-plans` itself just produced). Compose a candidate end-state and stated-check from them — do not re-ask what the plan already establishes.
 3. **Ask what's missing**, one question at a time via `AskUserQuestion`:
    - "Anything that must NOT change or happen on the way there? Say 'none' if there aren't any." (constraints)
@@ -41,7 +41,7 @@ After `superpowers:writing-plans` completes its own flow (plan written, reviewed
    /goal [the exact approved condition text]
    ```
    Plus a one-line note: `/goal` alone shows status, `/goal clear` cancels — once actually invoked. Also remind once, briefly: `/goal` doesn't change tool permissions — Claude still asks before tool calls your settings don't already allow; pair with auto mode for a fully unattended run.
-8. Proceed to the existing hand-off to `executing-plans`, unchanged.
+8. Proceed to the hand-off Step 0 determined: Direct flow's own entry point per `CLAUDE.md`'s Direct-flow section (this branch only reaches Step 8 when Step 0 chose or defaulted to Direct flow — Chain flow already exited at Step 0 itself).
 
 ## Why this exists
 

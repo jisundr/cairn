@@ -113,7 +113,7 @@ Any failed `[blocking]` check → `AskUserQuestion` (Attended) / `STATE.md` `Pha
 
 ### Step 5 — Branch/worktree creation
 
-Invoke `Skill(skill: "superpowers:using-git-worktrees")` — hard-required, this agent never reimplements worktree mechanics itself. Branch name: `.harness/workflow.md`'s `## Branching` convention if loaded in Step 4, else the default `<task-type>/<slug>` (`feature/<slug>` or `refactor/<slug>`, matching the plan's declared task type). Scoped to the submodule root if Step 3 detected one.
+Invoke `Skill(skill: "superpowers:using-git-worktrees")` — hard-required, this agent never reimplements worktree mechanics itself. Branch name: `.harness/workflow.md`'s `## Branching` convention if loaded in Step 4, else the default `<task-type>/<slug>` (`feature/<slug>` or `refactor/<slug>`, matching the plan's declared task type). Scoped to the submodule root only in Step 3's submodule-only case (no parent paths touched); in Step 3's mixed case the scope stays the parent repo, and Step 5.5 handles the submodule.
 
 ### Step 5.5 — Submodule initialization (mixed-scope plans only)
 
@@ -246,7 +246,7 @@ Triggered by opening context naming `"task-orchestrator Lightweight Finish"` plu
 
 0. `Bash cd <Worktree>` — into the worktree path received in context, before doing anything else. This is a fresh agent invocation; its cwd is wherever it was dispatched from, not automatically the worktree. Every step below except Step 4 (the usage report) runs from inside it.
 1. `Bash git remote get-url origin` — same remote-host detection as Publish Mode Step 4 (`github.com` → `gh`, `gitlab.com`/custom GitLab host → `glab`; `origin` wins on multi-remote signals).
-2. Stage and commit everything in the worktree — same consolidated-commit discipline as Publish Mode Step 5: plain conventional-commit message (no `.harness/workflow.md` to read conventions from in this mode), never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
+2. Stage and commit everything in the worktree — same consolidated-commit discipline as Publish Mode Step 6 (parent publish): plain conventional-commit message (no `.harness/workflow.md` to read conventions from in this mode), never `--no-verify` on a hook failure — stop and report instead (EXIT & DERAILMENT HANDLING).
 3. `Bash git push -u origin <branch>` — push with an explicit upstream. A freshly created branch has no upstream yet, and non-interactive PR/MR creation (Step 5) needs one.
 4. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_dashboard.py --window-report <Start> <now, ISO-8601 UTC> <original repo root>` via `Bash`. The `<cwd>` argument here MUST be the **original repository root** — the directory the invoking session started from before Lightweight Start ran, same repo-root cwd Step 2.5 documents running `--task-report` from — NOT the worktree path from Step 0. The transcripts directory is keyed on the session's own cwd via `encode_project_dir()`; passing the worktree path would make every lookup fail. Best-effort: if it comes back `Usage: unavailable (...)`, proceed without a usage section rather than blocking.
 5. Create the PR/MR via the CLI detected in Step 1 (from inside the worktree, same as Steps 1-3). Body includes the usage report from Step 4 when it produced a table (omit the section entirely on its `unavailable` fallback — never include the bare "unavailable" line in the PR/MR body itself, same rule as Publish Mode Step 6). Record the resulting URL.

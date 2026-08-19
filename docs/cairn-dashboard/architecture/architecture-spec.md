@@ -1,7 +1,7 @@
 # Architecture Specification: cairn-dashboard
 
 ## Metadata
-- Architecture Specification Version: v0.2
+- Architecture Specification Version: v0.3
 - Last Updated: 2026-08-19
 - Derived From: docs/cairn-dashboard/requirements/prd.md, docs/cairn-dashboard/requirements/user-flows.md
 - Author:
@@ -12,9 +12,7 @@
 ---
 
 ## System Overview
-cairn-dashboard is a local, single-user web application with two parts: a stdlib-only Python backend (living in the parent `cairn` repo at `scripts/usage_dashboard.py`) that parses local files (session transcripts, task-tracker state) and serves them as JSON, and a React single-page app (this repo, built with Vite) that polls those JSON endpoints and renders three tabs — Usage, Tracker, Swarms. There is no database, no auth, and no network exposure beyond `127.0.0.1`. The frontend is *designed* to ship as a pre-built static bundle, so the only runtime requirement for an end user will be `python3` — this is the target state this spec describes, not the current state of this repository.
-
-**Current vs. target:** as of this spec's writing, the `cairn-dashboard` repo contains no source yet (no `package.json`, `vite.config`, `src/`, or `dist/`), and the parent repo's `scripts/usage_dashboard.py` serves an inline-HTML page with only `/api/usage` and `/api/tracker` — no `/api/swarms`, no static-file serving. Every diagram and table below describes the target architecture this spec exists to build toward, not what's running today. Elements not yet built are marked **(target)** where they first appear.
+cairn-dashboard is a local, single-user web application with two parts: a stdlib-only Python backend (living in the parent `cairn` repo at `scripts/usage_dashboard.py`) that parses local files (session transcripts, task-tracker state) and serves them as JSON, and a React single-page app (this repo, built with Vite) that polls those JSON endpoints and renders three tabs — Usage, Tracker, Swarms. There is no database, no auth, and no network exposure beyond `127.0.0.1`. The frontend ships as a pre-built static bundle committed to the repo, so the only runtime requirement for an end user is `python3`.
 
 ---
 
@@ -37,9 +35,9 @@ columns 3
 
 | ID | Component | Responsibility | Technology |
 |----|-----------|---------------|------------|
-| C-01 | Python backend | Parses transcripts/`TRACKER.md`/`STATE.md`, serves JSON APIs and the static frontend bundle **(target — serves inline HTML today)** | Python 3 stdlib (`http.server`) |
-| C-02 | React SPA | Renders Usage/Tracker/Swarms tabs, polls the backend every 4s **(target — not yet built)** | Vite + React (TypeScript), static build |
-| C-03 | tmux (external) | Queried read-only for swarm liveness and pane-tail context **(target)** | `tmux` binary, optional |
+| C-01 | Python backend | Parses transcripts/`TRACKER.md`/`STATE.md`, serves JSON APIs and the static frontend bundle | Python 3 stdlib (`http.server`) |
+| C-02 | React SPA | Renders Usage/Tracker/Swarms tabs, polls the backend every 4s | Vite + React (TypeScript), static build |
+| C-03 | tmux (external) | Queried read-only for swarm liveness and pane-tail context | `tmux` binary, optional |
 
 ---
 
@@ -67,7 +65,7 @@ sequenceDiagram
     BE-->>SPA: JSON swarm data
 ```
 
-**Figure 2: Poll cycle — SPA requests, backend reads local state (target state — `/api/swarms` doesn't exist yet, `/api/usage`/`/api/tracker` exist today)**
+**Figure 2: Poll cycle — SPA requests, backend reads local state across all three endpoints**
 
 | From | To | Protocol | Description |
 |------|----|----------|-------------|
@@ -112,7 +110,7 @@ No cloud services, third-party APIs, or auth providers. Vite/React build tooling
 
 ## Deployment Model
 
-Single long-running local process per project, launched by `/cairn-dashboard` and backgrounded via a PID lockfile (`.cairn/usage-dashboard.pid`) — this part is already true today. No containers, no cloud deployment, no CI/CD pipeline for running it — it runs entirely on the developer's own machine, one process per project directory. **(target)** The frontend's own build (`npm run build` inside `dashboard/`) will happen at development time only, on the machine of whoever is changing the dashboard's UI — its output (`dist/`) will be committed to this repo so no build step is needed at launch time. None of this exists yet — see Current vs. target in System Overview.
+Single long-running local process per project, launched by `/cairn-dashboard` and backgrounded via a PID lockfile (`.cairn/usage-dashboard.pid`). No containers, no cloud deployment, no CI/CD pipeline for running it — it runs entirely on the developer's own machine, one process per project directory. The frontend's own build (`npm run build` inside `dashboard/`) happens at development time only, on the machine of whoever is changing the dashboard's UI — its output (`dist/`) is committed to this repo, so no build step is needed at launch time.
 
 ```mermaid
 flowchart LR
@@ -121,7 +119,7 @@ flowchart LR
     Parent -->|/cairn-dashboard launches| Proc["Local Python process<br/>(127.0.0.1, backgrounded)"]
 ```
 
-**Figure 3: Build-to-run path — no build step at launch time (target state)**
+**Figure 3: Build-to-run path — no build step at launch time**
 
 ---
 
@@ -145,7 +143,7 @@ flowchart LR
 ## Assumptions & Open Questions
 **Assumptions:**
 - Single user, single machine — no concurrent multi-client access patterns to design for.
-- The existing Python API surface (`/api/usage`, `/api/tracker`, `--task-report`, `--window-report`) is stable and not being redesigned by this effort, only extended (`/api/swarms`) and rehomed for static-file serving.
+- The existing Python API surface (`/api/usage`, `/api/tracker`, `--task-report`, `--window-report`) remains stable — extended with `/api/swarms` and rehomed for static-file serving, but otherwise unchanged.
 
 **Open Questions:**
 - How does a future cairn release bump the `dashboard/` submodule pointer? (carried from PRD)

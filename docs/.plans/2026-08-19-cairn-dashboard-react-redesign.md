@@ -10,6 +10,8 @@
 
 **Spec:** `docs/.specs/2026-08-19-dashboard-react-redesign-design.md` (integration design), `dashboard/docs/requirements/prd.md` (FR-001–FR-012, NFR-001–NFR-003 — FR-005 Merged into NFR-001, FR-011 Removed), `dashboard/docs/requirements/user-stories.md` (US-001–US-004), `dashboard/docs/requirements/user-flows.md` (UF-001–UF-004), `dashboard/docs/architecture/architecture-spec.md`.
 
+**Issues:** [#7](https://github.com/jisundr/cairn/issues/7) — umbrella, whole-dashboard React redesign (this plan's full scope). [#6](https://github.com/jisundr/cairn/issues/6) — bounded Swarms-tab design, already approved via spec-writing/brainstorming; maps to Tasks 1–4 and the Swarms half of Task 10.
+
 ## Global Constraints
 
 - Zero new runtime dependencies for end users (NFR-001) — backend stays stdlib Python; frontend ships pre-built/committed, no Node/npm/FastAPI needed to run the dashboard.
@@ -30,7 +32,7 @@
 **Interfaces:**
 - Produces: `parse_state_md(path: Path) -> dict` — returns `{}` if the file doesn't exist; otherwise a dict of every `Key: value` line in the file (keys lowercased with spaces→underscores, e.g. `"Handoff to"` → `"handoff_to"`), values as raw stripped strings.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_parse_state_md_parses_key_value_lines(tmp_path):
@@ -2261,6 +2263,36 @@ git push
 cd ..
 git add dashboard
 git commit -m "chore: bump dashboard submodule pointer — Swarms tab, feature-complete"
+```
+
+---
+
+### Task 11: Update `CLAUDE.md`'s dashboard description
+
+**Files:**
+- Modify: `CLAUDE.md`
+
+**Interfaces:** None (project-instruction prose only, no code).
+
+Added post-Doc-Gate (finding DOC-004): once Task 5 removes `PAGE_HTML` and Task 10 makes the app feature-complete, `CLAUDE.md`'s existing description of the dashboard becomes factually wrong. Deliberately the *last* task — must land after Task 10 so the prose describes what actually shipped, not a future state.
+
+- [ ] **Step 1: Rewrite the `/cairn-dashboard` paragraph**
+
+In `CLAUDE.md`, in the `**/cairn-dashboard and scripts/usage_dashboard.py**` paragraph, replace "serves a two-tab page (Usage / Tracker) that polls `/api/usage` and `/api/tracker` every 4s" with a three-tab description (Usage / Tracker / Swarms), naming `/api/swarms` alongside the existing two endpoints, and note that `usage_dashboard.py` now serves the committed `dashboard/dist/` static build (Vite+React SPA) instead of rendering an inline `PAGE_HTML` string.
+
+- [ ] **Step 2: Add `dashboard/` to "## What this is"**
+
+In `CLAUDE.md`'s "## What this is" section, add `dashboard/` (a git submodule, Vite+React+TypeScript SPA, pre-built `dist/` committed) alongside the existing flat-root content enumeration (`agents/`, `commands/`, `hooks/`, `skills/`, `scripts/`) — noting it's a submodule, not flat plugin content, since it ships a built frontend rather than agent/command/skill definitions.
+
+- [ ] **Step 3: Verify manually**
+
+Read the edited file back and confirm both paragraphs describe the shipped three-tab/three-endpoint/static-serving reality, with no remaining reference to `PAGE_HTML` or a two-tab page.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add CLAUDE.md
+git commit -m "docs: update CLAUDE.md dashboard description for React redesign (Swarms tab, static dist/ serving)"
 ```
 
 ---

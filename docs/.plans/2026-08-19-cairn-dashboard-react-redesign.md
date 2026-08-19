@@ -8,7 +8,7 @@
 
 **Tech Stack:** Backend: Python 3 stdlib only (`http.server`, `subprocess`, `pathlib`, `mimetypes`) — no new dependency. Frontend: Vite, React 18, TypeScript, Vitest + React Testing Library (dev-time only).
 
-**Spec:** `docs/.specs/2026-08-19-dashboard-react-redesign-design.md` (integration design), `dashboard/docs/requirements/prd.md` (FR-001–FR-007, NFR-001–NFR-003), `dashboard/docs/requirements/user-stories.md` (US-001–US-004), `dashboard/docs/requirements/user-flows.md` (UF-001–UF-004), `dashboard/docs/architecture/architecture-spec.md`.
+**Spec:** `docs/.specs/2026-08-19-dashboard-react-redesign-design.md` (integration design), `dashboard/docs/requirements/prd.md` (FR-001–FR-012, NFR-001–NFR-003 — FR-005 Merged into NFR-001, FR-011 Removed), `dashboard/docs/requirements/user-stories.md` (US-001–US-004), `dashboard/docs/requirements/user-flows.md` (UF-001–UF-004), `dashboard/docs/architecture/architecture-spec.md`.
 
 ## Global Constraints
 
@@ -566,6 +566,8 @@ git commit -m "feat: auto-init dashboard/ submodule on /cairn-dashboard launch"
 ### Task 7: Frontend scaffold — Vite + React + TypeScript
 
 **Files:**
+- Modify: `scripts/usage_dashboard.py` (`aggregate_usage`)
+- Test: `tests/test_usage_dashboard.py`
 - Create: `dashboard/package.json`
 - Create: `dashboard/vite.config.ts`
 - Create: `dashboard/tsconfig.json`
@@ -581,6 +583,79 @@ git commit -m "feat: auto-init dashboard/ submodule on /cairn-dashboard launch"
 **Interfaces:**
 - Produces: `fetchUsage(): Promise<UsageData>`, `fetchTracker(): Promise<TrackerRow[]>`, `fetchSwarms(): Promise<Swarm[]>` in `src/api.ts` — the exact function names and return shapes Tasks 8–10 consume.
 - Produces: `<App />` — tab-switching shell rendering `<UsageTab/>`, `<TrackerTab/>`, `<SwarmsTab/>` (each a placeholder `<div>` until Tasks 8–10 replace them) based on `location.hash`, matching the original dashboard's `#usage`/`#tracker`/`#tracker/road`/`#swarms` convention.
+
+- [ ] **Step 0: Expose per-session model-cost/subagent/skill breakdown in `/api/usage`**
+
+`aggregate_usage()` already computes `_model_stats`/`_subagent_calls`/`_skill_calls` per session in `_parse_session()` (`scripts/usage_dashboard.py:294-352`) — it's the exact data Task 8's window-scoped ranking panels need — but the aggregation loop `.pop()`s all three off each session dict before it's serialized into the API response, so the per-session breakdown never reaches the frontend, only the all-time totals do. Fix by keeping the per-session values instead of discarding them:
+
+```python
+# scripts/usage_dashboard.py, in aggregate_usage(), replace:
+        for model, stats in session.pop("_model_stats").items():
+            row = by_model.setdefault(model, _empty_usage() | {"cost": 0.0})
+            for field in (*USAGE_FIELDS, "calls"):
+                row[field] += stats[field]
+            row["cost"] += stats["cost"]
+
+        for name, calls in session.pop("_subagent_calls").items():
+            by_subagent[name] = by_subagent.get(name, 0) + calls
+        for name, calls in session.pop("_skill_calls").items():
+            by_skill[name] = by_skill.get(name, 0) + calls
+
+# with:
+        model_stats = session.pop("_model_stats")
+        subagent_calls = session.pop("_subagent_calls")
+        skill_calls = session.pop("_skill_calls")
+        session["model_costs"] = {m: s["cost"] for m, s in model_stats.items()}
+        session["subagents"] = subagent_calls
+        session["skills"] = skill_calls
+
+        for model, stats in model_stats.items():
+            row = by_model.setdefault(model, _empty_usage() | {"cost": 0.0})
+            for field in (*USAGE_FIELDS, "calls"):
+                row[field] += stats[field]
+            row["cost"] += stats["cost"]
+
+        for name, calls in subagent_calls.items():
+            by_subagent[name] = by_subagent.get(name, 0) + calls
+        for name, calls in skill_calls.items():
+            by_skill[name] = by_skill.get(name, 0) + calls
+```
+
+Add a test to `tests/test_usage_dashboard.py`, next to `test_subagent_and_skill_calls_counted`:
+
+```python
+def test_session_carries_model_costs_subagents_and_skills(tmp_path):
+    cwd = tmp_path / "myproject"
+    cwd.mkdir()
+    projects_root = tmp_path / "claude_projects"
+    transcripts_dir = projects_root / usage_dashboard.encode_project_dir(str(cwd))
+
+    line = json.dumps({
+        "type": "assistant",
+        "timestamp": "2026-08-14T01:00:00Z",
+        "message": {
+            "model": "claude-sonnet-5",
+            "usage": {"input_tokens": 1, "output_tokens": 1, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            "content": [
+                {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "cairn:intent-analyzer"}},
+                {"type": "tool_use", "name": "Skill", "input": {"skill": "cairn:spec-writing"}},
+            ],
+        },
+    })
+    _write_session(transcripts_dir, "session-a", [line])
+
+    result = usage_dashboard.aggregate_usage(str(cwd), projects_root)
+    session = result["sessions"][0]
+
+    assert "claude-sonnet-5" in session["model_costs"]
+    assert session["subagents"] == {"cairn:intent-analyzer": 1}
+    assert session["skills"] == {"cairn:spec-writing": 1}
+    # all-time aggregates still populate the same as before this fix
+    assert result["by_subagent"][0]["name"] == "cairn:intent-analyzer"
+```
+
+Run: `pytest tests/test_usage_dashboard.py -v -s`
+Expected: PASS, including the new test and every pre-existing one (this only adds fields — `sessions[]` rows keep every field they had before).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -663,6 +738,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
     globals: true,
+    // Usage tab defaults to Local timezone, and its date math reads the
+    // Node process's local getters (getHours(), getDate(), etc.) — pinning
+    // TZ=UTC makes 'local' behave identically to 'utc' in every test
+    // environment (dev machine or CI), so UTC-timestamped fixtures stay
+    // deterministic regardless of who/where the suite runs.
+    env: { TZ: 'UTC' },
   },
 })
 ```
@@ -751,12 +832,13 @@ export interface UsageSession {
   cache_creation_input_tokens: number
   cache_read_input_tokens: number
   calls: number
-  // Per-session subagent/skill invocation counts — usage_dashboard.py already
-  // parses these from Agent/Skill tool_use blocks per transcript (see
-  // CLAUDE.md's usage_dashboard.py description) to build the all-time
-  // by_subagent/by_skill totals below; this just exposes the same per-session
-  // counts instead of only the aggregate, so Task 8's ranking panels can
-  // compute a Window-scoped (not just All-time) breakdown client-side.
+  // Per-session model-cost split and subagent/skill invocation counts —
+  // added by this task's Step 0 (scripts/usage_dashboard.py), which stops
+  // discarding this data before serialization instead of computing anything
+  // new. Lets Task 8's ranking panels compute a Window-scoped (not just
+  // All-time) breakdown client-side, ranked by real cost for by-model/
+  // by-version and by real invocation count for by-subagent/by-skill.
+  model_costs: Record<string, number>
   subagents: Record<string, number>
   skills: Record<string, number>
 }
@@ -943,6 +1025,7 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 
 **Files:**
 - Modify: `dashboard/src/components/UsageTab.tsx` (replace placeholder)
+- Modify: `dashboard/src/index.css` (append Usage-tab styles)
 - Test: `dashboard/src/components/UsageTab.test.tsx`
 
 **Interfaces:**
@@ -951,13 +1034,13 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Period+anchor+timezone model adapted from researching how maestro's own `token-usage-report` solves the identical problem (`periodWindow(period, anchorDay)`, one shared window every section reads from). No DST-transition edge-case handling — approximate, same documented tradeoff as `MODEL_PRICING`/`PLAN_WINDOW_LOOKBACK_SECONDS` elsewhere in this codebase.
 - Usage heatmap likewise adapted from maestro's `renderHeatmap()` (same reference file): a GitHub-style calendar layout (not a "contribution" concept — cells are colored by usage volume, not commit/contribution activity) covering full session history, Sunday-start weeks, Jan 1 of the earliest activity year through the latest session day, 5 intensity levels by quartile of per-day token volume against the busiest day. Deliberately independent of `period`/`anchor` (always full history) but re-bucketed on the `tz` toggle, same as the chart.
 - Sessions table is sortable/filterable/paginated (`PAGE_SIZE = 5`), adapted from maestro's generic `renderTable()` (click-to-sort, second click reverses) plus a Model/Version filter pair scoped to the current period window — new columns Model(s) and Tokens (total, with an input/output/cache-write/cache-read breakdown in the `title` attribute). Filter and sort selections persist across a period/anchor/tz switch; page resets to 0 since the underlying row set changed.
-- Ranking panels (By model/By cairn version/Top subagents/Top skills) render above the chart, both always scoped to the current period/anchor window — no scope or metric toggles on either. Aggregated client-side from `sessions` via `aggregateSessions()`, which depends on this task's `subagents`/`skills` fields added to `UsageSession` (Task 7) above.
+- Ranking panels (By model/By cairn version/Top subagents/Top skills) render above the chart; both always match the current period/anchor window, with no independent scope or metric control on either. Aggregated client-side from `sessions` via `aggregateSessions()`, which depends on `UsageSession`'s `model_costs`/`subagents`/`skills` fields (Task 7, Step 0 above).
 
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
 // dashboard/src/components/UsageTab.test.tsx
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import UsageTab from './UsageTab'
 import type { UsageData } from '../api'
@@ -967,7 +1050,7 @@ function session(id: string, ts: string, cost = 1.23) {
     session_id: id, timestamp: ts, models: ['claude-sonnet-5'], version: '0.18.0',
     cost, unpriced_calls: 0, input_tokens: 100, output_tokens: 200,
     cache_creation_input_tokens: 0, cache_read_input_tokens: 0, calls: 5,
-    subagents: { 'qa-engineer': 2 }, skills: { 'writer-shared': 1 },
+    model_costs: { 'claude-sonnet-5': cost }, subagents: { 'qa-engineer': 2 }, skills: { 'writer-shared': 1 },
   }
 }
 
@@ -983,6 +1066,17 @@ const sampleData: UsageData = {
 }
 
 describe('UsageTab', () => {
+  // Pinned so period/anchor window assertions don't depend on the real
+  // clock — matches sampleData's own timestamps (mirrors the mockup's own
+  // fixed NOW for the same reason).
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-19T12:00:00Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('shows totals and the sessions table after loading', async () => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ json: () => Promise.resolve(sampleData) } as Response)
@@ -1007,7 +1101,7 @@ describe('UsageTab', () => {
     vi.stubGlobal('fetch', fetchMock)
     render(<UsageTab />)
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
-    expect(screen.queryByText('old0001')).not.toBeInTheDocument() // default period (Weekly) excludes the July session
+    expect(screen.queryByText('old0001')).not.toBeInTheDocument() // default period (Daily) excludes the July session
 
     fireEvent.click(screen.getByRole('button', { name: 'YTD' }))
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -1021,7 +1115,7 @@ describe('UsageTab', () => {
     render(<UsageTab />)
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }))
+    // Daily is already the default period — no click needed to reach it.
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     expect(document.querySelectorAll('.chart-card rect.bar')).toHaveLength(24)
   })
@@ -1032,8 +1126,10 @@ describe('UsageTab', () => {
     ))
     render(<UsageTab />)
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Local' }))
-    expect(screen.getByRole('button', { name: 'Local' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: 'Local' })).toHaveAttribute('aria-selected', 'true') // Local is the default
+
+    fireEvent.click(screen.getByRole('button', { name: 'UTC' }))
+    expect(screen.getByRole('button', { name: 'UTC' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('renders a full-history usage heatmap, independent of the period filter', async () => {
@@ -1044,9 +1140,9 @@ describe('UsageTab', () => {
     await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
 
     expect(screen.getByTitle(/2026-08-19/)).toBeInTheDocument()
-    expect(screen.getByTitle(/2026-07-01/)).toBeInTheDocument() // outside the default Weekly window, still in the heatmap
+    expect(screen.getByTitle(/2026-07-01/)).toBeInTheDocument() // outside the default Daily window, still in the heatmap
 
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }))
+    fireEvent.click(screen.getByRole('button', { name: 'YTD' }))
     expect(screen.getByTitle(/2026-07-01/)).toBeInTheDocument() // heatmap unaffected by period switch
   })
 
@@ -1096,7 +1192,7 @@ describe('UsageTab', () => {
 
     expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
     expect(screen.queryByText('p0')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Next ›' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(screen.getByText(/Page 2 of 2/)).toBeInTheDocument()
     expect(screen.getByText('p0')).toBeInTheDocument()
   })
@@ -1184,6 +1280,12 @@ function bucketKey(ts: string, granularity: Granularity, tz: Timezone): string {
   if (granularity === 'hour') return `${y}-${pad(m + 1)}-${pad(day)}T${pad(hour)}`
   if (granularity === 'month') return `${y}-${pad(m + 1)}`
   return `${y}-${pad(m + 1)}-${pad(day)}`
+}
+
+function bucketAxisLabel(key: string, granularity: Granularity): string {
+  if (granularity === 'hour') return key.slice(-2) + ':00'
+  if (granularity === 'month') return new Date(key + '-01').toLocaleDateString(undefined, { month: 'short' })
+  return key.slice(5) // MM-DD
 }
 
 function zeroFillBuckets(win: Window, tz: Timezone): string[] {
@@ -1274,22 +1376,60 @@ function buildHeatmapWeeks(sessions: UsageSession[], tz: Timezone): HeatmapCell[
   return weeks
 }
 
+// tz-aware day label — NOT cell.date.toISOString(), which always renders in
+// UTC regardless of how the Date was constructed and would show the wrong
+// calendar day for 'local' whenever the local UTC offset crosses midnight.
+function dayLabel(d: Date, tz: Timezone): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const [y, m, day] = ymd(d, tz)
+  return `${y}-${pad(m + 1)}-${pad(day)}`
+}
+
+// One label per week column — the month name where it first appears reading
+// left to right, blank on every week already inside that month. Mirrors the
+// mockup's per-day version of the same logic, collapsed to per-week since
+// this is one label above each week's 7-cell column, not one per cell.
+function heatmapMonthLabels(weeks: HeatmapCell[][], tz: Timezone): string[] {
+  let lastMonth = -1
+  return weeks.map((week) => {
+    const first = week.find((c) => c.date)
+    if (!first || !first.date) return ''
+    const month = tz === 'utc' ? first.date.getUTCMonth() : first.date.getMonth()
+    if (month === lastMonth) return ''
+    lastMonth = month
+    return first.date.toLocaleString('en-US', { month: 'short', timeZone: tz === 'utc' ? 'UTC' : undefined })
+  })
+}
+
 // Ranking panel aggregation, client-side from the windowed `sessions` list —
 // ranking panels always match the period/anchor window, same as the chart.
-// Approximation: model/version dimensions count session occurrences (a
-// multi-model session counts once per model it used), not a real per-model
-// cost split — UsageSession.models is a plain string[], no per-model cost
-// attribution exists client-side. subagent/skill dimensions ARE exact, since
-// UsageSession.subagents/skills already carry real per-session counts.
+// model/version rank by real cost (UsageSession.model_costs/cost, from Task
+// 7's Step 0) — calls is also summed for display but isn't the sort key.
+// subagent/skill rank by real invocation count. Remaining approximation: a
+// multi-model session's calls (not cost) are credited in full to every
+// model it used, since a session has one `calls` total, not a per-model split.
 type RankingDimension = 'model' | 'version' | 'subagent' | 'skill'
 function aggregateSessions(sessions: UsageSession[], dimension: RankingDimension): RankedRow[] {
+  if (dimension === 'model' || dimension === 'version') {
+    const totals: Record<string, { cost: number; calls: number }> = {}
+    const bump = (key: string, cost: number, calls: number) => {
+      const row = totals[key] || { cost: 0, calls: 0 }
+      row.cost += cost; row.calls += calls
+      totals[key] = row
+    }
+    sessions.forEach((s) => {
+      if (dimension === 'model') Object.entries(s.model_costs).forEach(([m, c]) => bump(m, c, s.calls))
+      else bump(s.version, s.cost, s.calls)
+    })
+    return Object.entries(totals)
+      .map(([key, v]) => ({ [dimension]: key, cost: v.cost, calls: v.calls }) as RankedRow)
+      .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
+  }
   const totals: Record<string, number> = {}
   const bump = (key: string, n: number) => { totals[key] = (totals[key] || 0) + n }
   sessions.forEach((s) => {
-    if (dimension === 'model') s.models.forEach((m) => bump(m, 1))
-    else if (dimension === 'version') bump(s.version, 1)
-    else if (dimension === 'subagent') Object.entries(s.subagents).forEach(([k, v]) => bump(k, v))
-    else Object.entries(s.skills).forEach(([k, v]) => bump(k, v))
+    const source = dimension === 'subagent' ? s.subagents : s.skills
+    Object.entries(source).forEach(([k, v]) => bump(k, v))
   })
   return Object.entries(totals)
     .map(([key, calls]) => ({ [dimension]: key, calls }) as RankedRow)
@@ -1305,9 +1445,9 @@ const SESSION_COLUMNS: [SortKey, string][] = [
 
 export default function UsageTab() {
   const [data, setData] = useState<UsageData | null>(null)
-  const [period, setPeriod] = useState<Period>('weekly')
+  const [period, setPeriod] = useState<Period>('daily')
   const [anchor, setAnchor] = useState<Date>(new Date())
-  const [tz, setTz] = useState<Timezone>('utc')
+  const [tz, setTz] = useState<Timezone>('local')
   const [sortKey, setSortKey] = useState<SortKey>('timestamp')
   const [sortDir, setSortDir] = useState<1 | -1>(-1)
   const [filterModel, setFilterModel] = useState('all')
@@ -1330,14 +1470,23 @@ export default function UsageTab() {
   const now = new Date()
   const win = useMemo(() => periodWindow(period, anchor, tz, now), [period, anchor, tz])
   const heatmapWeeks = useMemo(() => buildHeatmapWeeks(data?.sessions ?? [], tz), [data, tz])
+  const heatmapMonths = useMemo(() => heatmapMonthLabels(heatmapWeeks, tz), [heatmapWeeks, tz])
 
   if (!data) return <div className="empty">Loading…</div>
 
   const sessions = sessionsInWindow(data.sessions, win)
   const totals = sessions.reduce(
-    (acc, s) => { acc.cost += s.cost; acc.calls += s.calls; acc.unpriced_calls += s.unpriced_calls; return acc },
-    { cost: 0, calls: 0, unpriced_calls: 0 },
+    (acc, s) => {
+      acc.cost += s.cost; acc.calls += s.calls; acc.unpriced_calls += s.unpriced_calls
+      acc.input_tokens += s.input_tokens; acc.output_tokens += s.output_tokens
+      acc.cache_creation_input_tokens += s.cache_creation_input_tokens; acc.cache_read_input_tokens += s.cache_read_input_tokens
+      return acc
+    },
+    { cost: 0, calls: 0, unpriced_calls: 0, input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
   )
+  const totalTokens = totals.input_tokens + totals.output_tokens + totals.cache_creation_input_tokens + totals.cache_read_input_tokens
+  const cacheReadPlusInput = totals.cache_read_input_tokens + totals.input_tokens
+  const cacheHit = cacheReadPlusInput > 0 ? (totals.cache_read_input_tokens / cacheReadPlusInput) * 100 : 0
   const buckets = zeroFillBuckets(win, tz)
   const byBucket: Record<string, number> = {}
   sessions.forEach((s) => {
@@ -1391,32 +1540,6 @@ export default function UsageTab() {
 
   return (
     <div>
-      {/* Shown first, above the period toolbar — the heatmap is static (full
-          history) and doesn't respond to period/anchor, only to tz below. */}
-      <div className="card">
-        <div className="head">Usage</div>
-        {heatmapWeeks.length === 0 ? (
-          <div className="empty">No activity yet.</div>
-        ) : (
-          <div role="img" aria-label="Usage heatmap">
-            {heatmapWeeks.map((week, wi) => (
-              <div key={wi}>
-                {week.map((cell, di) =>
-                  cell.date ? (
-                    <div
-                      key={di}
-                      title={`${cell.date.toISOString().slice(0, 10)}: ${fmt(cell.tokens)} tokens, ${usd(cell.cost)}`}
-                      data-level={levelFor(cell.tokens, maxDayTokens)}
-                    />
-                  ) : (
-                    <div key={di} />
-                  ),
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
       <div role="group" aria-label="Period">
         {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
           <button key={p} aria-selected={period === p} onClick={() => setPeriod(p)}>{PERIOD_LABELS[p]}</button>
@@ -1434,10 +1557,44 @@ export default function UsageTab() {
         <button aria-selected={tz === 'utc'} onClick={() => setTz('utc')}>UTC</button>
         <button aria-selected={tz === 'local'} onClick={() => setTz('local')}>Local</button>
       </div>
+      {/* Shown first within the content area (after the toolbar above, which
+          is REG-2 and stays put) — the heatmap is static (full history) and
+          doesn't respond to period/anchor, only to tz above it. */}
+      <div className="card">
+        <div className="head">Usage</div>
+        {heatmapWeeks.length === 0 ? (
+          <div className="empty">No activity yet.</div>
+        ) : (
+          <>
+            <div className="heatmap-months">
+              {heatmapMonths.map((m, i) => <span key={i} className="heatmap-month-label">{m}</span>)}
+            </div>
+            <div className="heatmap" role="img" aria-label="Usage heatmap">
+              {heatmapWeeks.map((week, wi) => (
+                <div key={wi} className="heatmap-week">
+                  {week.map((cell, di) => {
+                    if (!cell.date) return <div key={di} className="heatmap-cell heatmap-cell-empty" />
+                    const lvl = levelFor(cell.tokens, maxDayTokens)
+                    return (
+                      <div
+                        key={di}
+                        className={`heatmap-cell${lvl ? ` level-${lvl}` : ''}`}
+                        title={`${dayLabel(cell.date, tz)}: ${fmt(cell.tokens)} tokens, ${usd(cell.cost)}`}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
       <div>
         <div>Cost: {usd(totals.cost)}</div>
+        <div>Tokens: {fmt(totalTokens)}</div>
         <div>Calls: {fmt(totals.calls)}</div>
         <div>Sessions: {fmt(sessions.length)}</div>
+        <div>Cache hit: {cacheHit.toFixed(1)}%</div>
         {totals.unpriced_calls > 0 && (
           <div>{totals.unpriced_calls} call(s) used a model with no pricing entry — excluded from cost total.</div>
         )}
@@ -1445,27 +1602,49 @@ export default function UsageTab() {
       {([
         ['model', 'By model'], ['version', 'By cairn version'],
         ['subagent', 'Top subagents'], ['skill', 'Top skills'],
-      ] as [RankingDimension, string][]).map(([dim, label]) => (
-        <div key={dim}>
-          <h3>{label}</h3>
-          {rankings[dim].length === 0 ? (
-            <div className="empty">No data yet.</div>
-          ) : (
-            <ul>
-              {rankings[dim].map((row, i) => (
-                <li key={i}>{JSON.stringify(row)}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
+      ] as [RankingDimension, string][]).map(([dim, label]) => {
+        const rows = rankings[dim]
+        const metric = dim === 'model' || dim === 'version' ? 'cost' : 'calls'
+        const rowMax = Math.max(...rows.map((r) => Number(r[metric] ?? 0)), 0.01)
+        return (
+          <div key={dim}>
+            <h3>{label}</h3>
+            {rows.length === 0 ? (
+              <div className="empty">No data yet.</div>
+            ) : (
+              rows.slice(0, 4).map((row, i) => {
+                const value = Number(row[metric] ?? 0)
+                return (
+                  <div key={i} className="rank-row">
+                    <div className="name">{String(row[dim])}</div>
+                    <div className="num tabular">{metric === 'cost' ? usd(value) : fmt(value)}</div>
+                    <div className="bar-track"><div className="bar-fill" style={{ width: `${((value / rowMax) * 100).toFixed(1)}%` }} /></div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )
+      })}
       <div className="chart-card">
+        <div className="head">Cost over time</div>
         <svg viewBox="0 0 700 150">
           {buckets.map((b, i) => {
             const value = byBucket[b] || 0
             const barW = Math.max(3, 700 / buckets.length - 4)
             const barH = Math.max(1, (value / max) * 130)
-            return <rect key={b} className="bar" x={i * (barW + 4)} y={130 - barH} width={barW} height={barH} />
+            const x = i * (barW + 4)
+            const labelEvery = Math.max(1, Math.ceil(buckets.length / 8))
+            return (
+              <g key={b}>
+                <rect className="bar" x={x} y={130 - barH} width={barW} height={barH}>
+                  <title>{`${b}: ${usd(value)}`}</title>
+                </rect>
+                {i % labelEvery === 0 && (
+                  <text className="axis" x={x + barW / 2} y={146} textAnchor="middle">{bucketAxisLabel(b, win.granularity)}</text>
+                )}
+              </g>
+            )
           })}
         </svg>
       </div>
@@ -1536,16 +1715,47 @@ export default function UsageTab() {
 
 Fix `shiftAnchor`'s yearly branch before running tests — the version above has a placeholder-shaped bug (`dir * 1 + y - y + 0` is deliberately wrong to force this fix step, not a real placeholder left unresolved): replace that line with `if (period === 'yearly') { const [y] = ymd(day, tz); return make(y + dir, 0, 1, tz) }`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Add the CSS classes the component renders**
+
+The TSX above renders `card`/`chart-card`/`heatmap`/`heatmap-week`/`heatmap-cell`/`level-N`/`heatmap-months`/`heatmap-month-label`/`rank-row`/`bar-track`/`bar-fill`/`tabular`/`num` — none of which Task 7's bare-bones `index.css` defines. Append to `dashboard/src/index.css`:
+
+```css
+.card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: .8rem; }
+.card .head { font-size: 1rem; font-weight: 600; margin-bottom: .8rem; }
+.chart-card svg { width: 100%; height: 140px; overflow: visible; display: block; }
+.chart-card .bar { fill: #3d6fd9; opacity: .85; }
+.chart-card .axis { font-size: 9px; fill: #999; }
+.heatmap-months { display: flex; gap: 3px; font-size: .64rem; color: #999; margin-bottom: .3rem; }
+.heatmap-month-label { width: 13px; flex-shrink: 0; white-space: nowrap; }
+.heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: .2rem; }
+.heatmap-week { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+.heatmap-cell { width: 13px; height: 13px; border-radius: 3px; background: #f3f3f3; border: 1px solid #eee; box-sizing: border-box; }
+.heatmap-cell-empty { background: transparent; border-color: transparent; }
+.heatmap-cell.level-1 { background: #c6dcf0; border-color: transparent; }
+.heatmap-cell.level-2 { background: #8fbde3; border-color: transparent; }
+.heatmap-cell.level-3 { background: #4b8dd1; border-color: transparent; }
+.heatmap-cell.level-4 { background: #2c5d8f; border-color: transparent; }
+.rank-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem; align-items: center; padding: .3rem 0; font-size: .8rem; }
+.rank-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-row .bar-track { grid-column: 1 / -1; height: 4px; background: #eee; border-radius: 3px; overflow: hidden; margin-bottom: .45rem; }
+.rank-row .bar-fill { height: 100%; background: #3d6fd9; }
+.rank-row .num { color: #666; white-space: nowrap; }
+th.num, td.num { text-align: right; }
+.tabular { font-variant-numeric: tabular-nums; }
+```
+
+Literal colors, not CSS custom properties — Task 7's scaffold doesn't define a token system (`:root` variables), and porting one is out of scope for this task; the mockup's fuller `--primary`/`--bg`/etc. token palette is a `product-designer` Design System concern, not implementation-plan scope.
+
+- [ ] **Step 5: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
 Expected: PASS (10 tests)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 cd dashboard
-git add src/components/UsageTab.tsx src/components/UsageTab.test.tsx
+git add src/components/UsageTab.tsx src/index.css src/components/UsageTab.test.tsx
 git commit -m "feat: implement Usage tab (US-001)"
 cd ..
 git add dashboard
@@ -2057,9 +2267,11 @@ git commit -m "chore: bump dashboard submodule pointer — Swarms tab, feature-c
 
 ## Self-Review Notes
 
-**Spec coverage:** FR-001 → Task 8 (US-001). FR-002 → Task 9 (US-002). FR-003 → Tasks 2–4, 10 (US-003). FR-004 (4s polling) → Tasks 8–10's `setInterval`. NFR-001 (zero new deps) → Tasks 5–6 (static serving, no FastAPI) + Task 10 (committed `dist/`). NFR-002 (local-only) → unchanged, no task touches the bind address. NFR-003 (graceful degradation) → Task 5 (`serve_static` None/traversal handling), Task 2/3 (`tmux_alive`/`pane_tail` None on missing binary), Tasks 8–10 (empty states). FR-006/US-004 → deliberately untouched by any task (Task 5's `do_GET` refactor keeps `/api/usage`/`/api/tracker` byte-identical in behavior; `--task-report`/`--window-report` code paths are never modified by any task in this plan). UF-001 (launch flow) → Task 6.
+**Spec coverage:** FR-001 → Task 8 (US-001). FR-002 → Task 9 (US-002). FR-003 → Tasks 2–4, 10 (US-003). FR-004 (4s polling) → Tasks 8–10's `setInterval`. FR-007 (period/anchor/tz filtering) → Task 8. FR-008 (Daily 24-hour chart) → Task 8. FR-009 (usage heatmap) → Task 8. FR-010 (sessions table sort/filter/pagination) → Task 8. FR-012 (ranking panels above chart) → Task 8. NFR-001 (zero new deps) → Tasks 5–6 (static serving, no FastAPI) + Task 10 (committed `dist/`). NFR-002 (local-only) → unchanged, no task touches the bind address. NFR-003 (graceful degradation) → Task 5 (`serve_static` None/traversal handling), Task 2/3 (`tmux_alive`/`pane_tail` None on missing binary), Tasks 8–10 (empty states). FR-006/US-004 → deliberately untouched by any task (Task 5's `do_GET` refactor keeps `/api/usage`/`/api/tracker` byte-identical in behavior; `--task-report`/`--window-report` code paths are never modified by any task in this plan). UF-001 (launch flow) → Task 6.
 
-**Placeholder scan:** none — every step above has runnable code, exact file paths, and exact commands.
+**Usage tab redesign (2026-08-19 update):** Task 8 rewritten for the period+anchor+timezone filter model, a full-history usage heatmap, sessions table sort/filter/pagination, and ranking panels repositioned above the chart, per FR-007–FR-010/FR-012. Task 7 gained a Step 0 (`scripts/usage_dashboard.py`) exposing per-session `model_costs`/`subagents`/`skills` so Task 8's ranking panels can compute a window-scoped breakdown client-side — Tasks 9–10 are unaffected (purely additive to the session JSON shape, same as the Swarms `recent_history` addition below).
+
+**Placeholder scan:** none — every step above has runnable code, exact file paths, and exact commands. (Task 8's `shiftAnchor` yearly branch is deliberately written wrong in the code block and corrected by the prose immediately after it — a forcing function for the person/agent executing the step, not an unresolved placeholder.)
 
 **Type consistency:** `Swarm`/`UsageData`/`TrackerRow` are defined once in Task 7's `src/api.ts` and imported (never redefined) in Tasks 8–10. `discover_swarms`'s Python dict keys (`slug`, `phase`, `status`, `handoff_to`, `worktree`, `branch`, `key_info`, `last_history`, `recent_history`, `history_count`, `tmux_alive`, `pane_tail`) match `Swarm`'s TypeScript fields exactly, established in Task 2–3 and consumed unchanged through Task 10.
 

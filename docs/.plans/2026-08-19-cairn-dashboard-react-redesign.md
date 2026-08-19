@@ -70,12 +70,12 @@ def test_parse_state_md_ignores_non_key_value_lines(tmp_path):
     assert result == {"mode": "Attended"}
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_usage_dashboard.py -k parse_state_md -v`
 Expected: FAIL with `AttributeError: module 'usage_dashboard' has no attribute 'parse_state_md'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to `scripts/usage_dashboard.py` immediately after the `parse_history_md` function (after its closing `return entries`, before `def _parse_iso`):
 
@@ -99,12 +99,12 @@ def parse_state_md(path: Path) -> dict:
     return result
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_usage_dashboard.py -k parse_state_md -v`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/usage_dashboard.py tests/test_usage_dashboard.py
@@ -124,7 +124,7 @@ git commit -m "feat: add parse_state_md for generic STATE.md parsing"
 - Produces: `discover_swarms(cwd: str) -> list[dict]` — one dict per `Mode: Unattended` task folder under `docs/.tasks/*/STATE.md`, each with keys: `slug` (str, folder name), `phase`, `status`, `handoff_to`, `worktree`, `branch`, `key_info` (all from `STATE.md`, `""` if absent), `last_history` (dict `{"timestamp", "phase", "note"}` or `None` if `HISTORY.md` has no timestamped lines), `recent_history` (list of up to 5 such dicts, newest first — feeds the Swarms detail panel's history log), `history_count` (int), `tmux_alive` (`True`/`False`/`None` — `None` means `tmux` binary is unavailable).
 - Tasks whose `STATE.md` has no `mode` key, or `mode` isn't exactly `"Unattended"`, are excluded.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_discover_swarms_finds_unattended_tasks_only(tmp_path, monkeypatch):
@@ -191,12 +191,12 @@ def test_discover_swarms_tmux_missing_binary_sets_none(tmp_path, monkeypatch):
     assert swarms[0]["tmux_alive"] is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_usage_dashboard.py -k discover_swarms -v`
 Expected: FAIL with `AttributeError: module 'usage_dashboard' has no attribute 'discover_swarms'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to `scripts/usage_dashboard.py`, right after `parse_state_md` (add `import subprocess` to the import block at the top, alphabetically after `import socket`):
 
@@ -237,12 +237,12 @@ def discover_swarms(cwd: str) -> list:
     return swarms
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_usage_dashboard.py -k discover_swarms -v`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/usage_dashboard.py tests/test_usage_dashboard.py
@@ -262,7 +262,7 @@ git commit -m "feat: add discover_swarms with tmux liveness checks"
 - Produces: `_tmux_pane_tail(branch: str, lines: int = 20) -> list[str] | None` — `None` if `tmux` is unavailable or the capture fails; otherwise the last `lines` lines of the pane, each a plain string.
 - `discover_swarms` gains a `pane_tail` key: `None` unless `phase == "HANDOFF NEEDED"` and `tmux_alive is True`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_tmux_pane_tail_returns_last_lines(monkeypatch):
@@ -297,12 +297,12 @@ def test_discover_swarms_includes_pane_tail_only_on_handoff_needed(tmp_path, mon
     assert swarms[0]["pane_tail"] is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_usage_dashboard.py -k pane_tail -v`
 Expected: FAIL — `_tmux_pane_tail` doesn't exist, and `discover_swarms` returns no `pane_tail` key (`KeyError`)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add after `_tmux_has_session`:
 
@@ -344,12 +344,12 @@ In `discover_swarms`, change the `tmux_alive` line and the dict construction to:
 
 (Replace the old `swarms.append(...)` block from Task 2 entirely with the one above — remove the duplicate `tmux_alive` assignment line that Task 2 left above the loop body.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_usage_dashboard.py -k "pane_tail or discover_swarms" -v`
 Expected: PASS (all tests from Tasks 2 and 3)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/usage_dashboard.py tests/test_usage_dashboard.py
@@ -370,7 +370,7 @@ git commit -m "feat: add tmux pane-tail excerpt for HANDOFF NEEDED swarms"
 
 This endpoint has no pure-function unit test of its own (it's three lines of routing glue identical in shape to the existing `/api/tracker` route) — `discover_swarms` itself is already fully tested by Tasks 2–3. Verify manually per Step 3 below instead of adding a redundant test.
 
-- [ ] **Step 1: Add the route**
+- [x] **Step 1: Add the route**
 
 In `do_GET` (`scripts/usage_dashboard.py`), add a new branch right after the existing `/api/tracker` branch:
 
@@ -383,13 +383,13 @@ In `do_GET` (`scripts/usage_dashboard.py`), add a new branch right after the exi
                 self._send(200, "application/json", json.dumps(swarms))
 ```
 
-- [ ] **Step 2: Verify manually**
+- [x] **Step 2: Verify manually**
 
 Run: `cd /tmp && mkdir -p verify-swarms/docs/.tasks/2026-08-19-x && cd verify-swarms && printf "Mode: Unattended\nPhase: PLAN\nBranch: feature/x\n" > docs/.tasks/2026-08-19-x/STATE.md && python3 /Users/jaysondelosreyes/cairn/scripts/usage_dashboard.py . &`
 Then: `curl -s http://127.0.0.1:4756/api/swarms | python3 -m json.tool`
 Expected: JSON array with one object, `"slug": "2026-08-19-x"`, `"phase": "PLAN"`. Then `kill %1` and `cd / && rm -rf /tmp/verify-swarms`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/usage_dashboard.py
@@ -408,7 +408,7 @@ git commit -m "feat: add GET /api/swarms endpoint"
 - Produces: `serve_static(dist_dir: Path, request_path: str) -> tuple[str, bytes] | None` — `None` if `dist_dir/index.html` doesn't exist at all; otherwise `(content_type, file_bytes)`, falling back to `index.html` for any path that doesn't match a real file under `dist_dir` (SPA entry), with a path-traversal guard.
 - `do_GET`'s catch-all branch (anything not `/api/...`) now calls `serve_static` instead of returning the old inline `PAGE_HTML`. A `None` result sends `500` with a message telling the user to run `git submodule update --init dashboard`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_serve_static_serves_existing_file(tmp_path):
@@ -447,12 +447,12 @@ def test_serve_static_blocks_path_traversal(tmp_path):
     assert body == b"<html>spa root</html>"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_usage_dashboard.py -k serve_static -v`
 Expected: FAIL with `AttributeError: module 'usage_dashboard' has no attribute 'serve_static'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add `import mimetypes` to the import block at the top of `scripts/usage_dashboard.py` (alphabetically, after `import json`).
 
@@ -514,12 +514,12 @@ Now remove the old inline-HTML route. Replace the `do_GET` method's opening bran
 
 Delete the now-unused `PAGE_HTML = """..."""` constant entirely (the large multi-line string previously spanning roughly lines 419–863) — the whole inline HTML/CSS/JS dashboard is replaced by the React build.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_usage_dashboard.py -v`
 Expected: PASS — full suite (all prior tests still pass, plus the 4 new `serve_static` tests). This is also the point to confirm nothing referencing `PAGE_HTML` remains: `grep -n PAGE_HTML scripts/usage_dashboard.py` should return nothing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/usage_dashboard.py tests/test_usage_dashboard.py
@@ -535,7 +535,7 @@ git commit -m "feat: serve dashboard/dist/ as static files, remove inline PAGE_H
 
 **Interfaces:** None (markdown instructions only, no code).
 
-- [ ] **Step 1: Add the auto-init step**
+- [x] **Step 1: Add the auto-init step**
 
 In `commands/cairn-dashboard.md`, in the "Otherwise (start, the default)" numbered list, insert a new step between the existing step 2 (pid-lockfile check) and step 3 (run the script), renumbering the steps that follow:
 
@@ -552,11 +552,11 @@ In `commands/cairn-dashboard.md`, in the "Otherwise (start, the default)" number
 
 (This replaces the existing steps 3–7 in that section — same content, renumbered, with the new step 3 inserted before the old step 3.)
 
-- [ ] **Step 2: Verify manually**
+- [x] **Step 2: Verify manually**
 
 Read the edited file back and confirm the numbered list runs 1–8 with no gaps or duplicate numbers, and that the new step 3 references `dashboard/dist/index.html` (not `dist/index.html` — must be relative to the project root, since that's where `/cairn-dashboard` runs from).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add commands/cairn-dashboard.md
@@ -586,7 +586,7 @@ git commit -m "feat: auto-init dashboard/ submodule on /cairn-dashboard launch"
 - Produces: `fetchUsage(): Promise<UsageData>`, `fetchTracker(): Promise<TrackerRow[]>`, `fetchSwarms(): Promise<Swarm[]>` in `src/api.ts` — the exact function names and return shapes Tasks 8–10 consume.
 - Produces: `<App />` — tab-switching shell rendering `<UsageTab/>`, `<TrackerTab/>`, `<SwarmsTab/>` (each a placeholder `<div>` until Tasks 8–10 replace them) based on `location.hash`, matching the original dashboard's `#usage`/`#tracker`/`#tracker/road`/`#swarms` convention.
 
-- [ ] **Step 0: Expose per-session model-cost/subagent/skill breakdown in `/api/usage`**
+- [x] **Step 0: Expose per-session model-cost/subagent/skill breakdown in `/api/usage`**
 
 `aggregate_usage()` already computes `_model_stats`/`_subagent_calls`/`_skill_calls` per session in `_parse_session()` (`scripts/usage_dashboard.py:294-352`) — it's the exact data Task 8's window-scoped ranking panels need — but the aggregation loop `.pop()`s all three off each session dict before it's serialized into the API response, so the per-session breakdown never reaches the frontend, only the all-time totals do. Fix by keeping the per-session values instead of discarding them:
 
@@ -659,7 +659,7 @@ def test_session_carries_model_costs_subagents_and_skills(tmp_path):
 Run: `pytest tests/test_usage_dashboard.py -v -s`
 Expected: PASS, including the new test and every pre-existing one (this only adds fields — `sessions[]` rows keep every field they had before).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 // dashboard/src/App.test.tsx
@@ -686,12 +686,12 @@ describe('App', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd dashboard && npm install && npm run test -- --run`
 Expected: FAIL — no `App.tsx`/`api.ts`/build config exist yet, so this fails at module resolution before even reaching an assertion.
 
-- [ ] **Step 3: Write the scaffold**
+- [x] **Step 3: Write the scaffold**
 
 `dashboard/package.json`:
 ```json
@@ -1005,12 +1005,12 @@ export default function SwarmsTab() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run`
 Expected: PASS (1 test)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd dashboard
@@ -1038,7 +1038,7 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Sessions table is sortable/filterable/paginated (`PAGE_SIZE = 5`), adapted from maestro's generic `renderTable()` (click-to-sort, second click reverses) plus a Model/Version filter pair scoped to the current period window — new columns Model(s) and Tokens (total, with an input/output/cache-write/cache-read breakdown in the `title` attribute). Filter and sort selections persist across a period/anchor/tz switch; page resets to 0 since the underlying row set changed.
 - Ranking panels (By model/By cairn version/Top subagents/Top skills) render above the chart; both always match the current period/anchor window, with no independent scope or metric control on either. Aggregated client-side from `sessions` via `aggregateSessions()`, which depends on `UsageSession`'s `model_costs`/`subagents`/`skills` fields (Task 7, Step 0 above).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 // dashboard/src/components/UsageTab.test.tsx
@@ -1201,12 +1201,12 @@ describe('UsageTab', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
 Expected: FAIL — placeholder component has none of this markup.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```typescript
 // dashboard/src/components/UsageTab.tsx
@@ -1717,7 +1717,7 @@ export default function UsageTab() {
 
 Fix `shiftAnchor`'s yearly branch before running tests — the version above has a placeholder-shaped bug (`dir * 1 + y - y + 0` is deliberately wrong to force this fix step, not a real placeholder left unresolved): replace that line with `if (period === 'yearly') { const [y] = ymd(day, tz); return make(y + dir, 0, 1, tz) }`.
 
-- [ ] **Step 4: Add the CSS classes the component renders**
+- [x] **Step 4: Add the CSS classes the component renders**
 
 The TSX above renders `card`/`chart-card`/`heatmap`/`heatmap-week`/`heatmap-cell`/`level-N`/`heatmap-months`/`heatmap-month-label`/`rank-row`/`bar-track`/`bar-fill`/`tabular`/`num` — none of which Task 7's bare-bones `index.css` defines. Append to `dashboard/src/index.css`:
 
@@ -1748,12 +1748,12 @@ th.num, td.num { text-align: right; }
 
 Literal colors, not CSS custom properties — Task 7's scaffold doesn't define a token system (`:root` variables), and porting one is out of scope for this task; the mockup's fuller `--primary`/`--bg`/etc. token palette is a `product-designer` Design System concern, not implementation-plan scope.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
 Expected: PASS (10 tests)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd dashboard
@@ -1776,7 +1776,7 @@ git commit -m "chore: bump dashboard submodule pointer — Usage tab"
 - Consumes: `fetchTracker()`, `TrackerRow` (Task 7's `src/api.ts`).
 - Produces: `<TrackerTab />`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 // dashboard/src/components/TrackerTab.test.tsx
@@ -1820,12 +1820,12 @@ describe('TrackerTab', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd dashboard && npm run test -- --run TrackerTab`
 Expected: FAIL — placeholder component has none of this markup.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```typescript
 // dashboard/src/components/TrackerTab.tsx
@@ -1910,12 +1910,12 @@ export default function TrackerTab() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run TrackerTab`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd dashboard
@@ -1940,7 +1940,7 @@ git commit -m "chore: bump dashboard submodule pointer — Tracker tab"
 - Consumes: `fetchSwarms()`, `Swarm`, `HistoryEntry`, `CHAIN_PHASES` (Task 7's `src/api.ts`).
 - Produces: `<SwarmsTab />` — the last piece; after this task the app is feature-complete per US-001–US-004. List + detail split per `ui-layout-spec.md`'s Swarms layout (REG-3 list pane, REG-4 detail pane).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 // dashboard/src/components/SwarmsTab.test.tsx
@@ -2052,12 +2052,12 @@ describe('SwarmsTab', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd dashboard && npm run test -- --run SwarmsTab`
 Expected: FAIL — placeholder component has none of this markup.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```typescript
 // dashboard/src/components/SwarmsTab.tsx
@@ -2214,12 +2214,12 @@ export default function SwarmsTab() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run SwarmsTab`
 Expected: PASS (7 tests). Then run the full frontend suite: `npm run test -- --run` — expect PASS across App/UsageTab/TrackerTab/SwarmsTab (13 tests total).
 
-- [ ] **Step 5: Build, write README, commit**
+- [x] **Step 5: Build, write README, commit**
 
 Run: `cd dashboard && npm run build`
 Expected: `dist/index.html` and `dist/assets/*.{js,css}` are created, no TypeScript errors.
@@ -2276,19 +2276,19 @@ git commit -m "chore: bump dashboard submodule pointer — Swarms tab, feature-c
 
 Added post-Doc-Gate (finding DOC-004): once Task 5 removes `PAGE_HTML` and Task 10 makes the app feature-complete, `CLAUDE.md`'s existing description of the dashboard becomes factually wrong. Deliberately the *last* task — must land after Task 10 so the prose describes what actually shipped, not a future state.
 
-- [ ] **Step 1: Rewrite the `/cairn-dashboard` paragraph**
+- [x] **Step 1: Rewrite the `/cairn-dashboard` paragraph**
 
 In `CLAUDE.md`, in the `**/cairn-dashboard and scripts/usage_dashboard.py**` paragraph, replace "serves a two-tab page (Usage / Tracker) that polls `/api/usage` and `/api/tracker` every 4s" with a three-tab description (Usage / Tracker / Swarms), naming `/api/swarms` alongside the existing two endpoints, and note that `usage_dashboard.py` now serves the committed `dashboard/dist/` static build (Vite+React SPA) instead of rendering an inline `PAGE_HTML` string.
 
-- [ ] **Step 2: Add `dashboard/` to "## What this is"**
+- [x] **Step 2: Add `dashboard/` to "## What this is"**
 
 In `CLAUDE.md`'s "## What this is" section, add `dashboard/` (a git submodule, Vite+React+TypeScript SPA, pre-built `dist/` committed) alongside the existing flat-root content enumeration (`agents/`, `commands/`, `hooks/`, `skills/`, `scripts/`) — noting it's a submodule, not flat plugin content, since it ships a built frontend rather than agent/command/skill definitions.
 
-- [ ] **Step 3: Verify manually**
+- [x] **Step 3: Verify manually**
 
 Read the edited file back and confirm both paragraphs describe the shipped three-tab/three-endpoint/static-serving reality, with no remaining reference to `PAGE_HTML` or a two-tab page.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add CLAUDE.md

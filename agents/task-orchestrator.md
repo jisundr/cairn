@@ -1,6 +1,6 @@
 ---
 name: task-orchestrator
-description: "Use this agent to run the coding-chain's Plan and Publish steps. Plan Mode: hard-requires an existing docs/.plans/<slug>.md (reads it as the plan, never re-authors it), creates docs/.tasks/YYYY-MM-DD-<slug>/, runs an Environment Preflight against .harness/environment.md when present (gates branch/worktree creation on any failed blocking check), runs a qa-engineer+software-engineer feasibility assessment supplemented by a soft-optional Graphify scope query, creates the branch/worktree via superpowers:using-git-worktrees. Publish Mode: consolidated commit, PR/MR via gh/glab, UAT checklist, surfaces harness+doc-drift flags, closes the ticket and deletes the local plan draft once closure is observed. First and last agent in the chain.
+description: "Use this agent to run the coding-chain's Plan and Publish steps. Plan Mode: hard-requires an existing docs/.plans/<slug>.md (reads it as the plan, never re-authors it), creates docs/.tasks/YYYY-MM-DD-<slug>/, runs an Environment Preflight against .harness/environment.md when present (gates branch/worktree creation on any failed blocking check), runs a qa-engineer+software-engineer feasibility assessment supplemented by a soft-optional Graphify scope query, creates the branch/worktree via superpowers:using-git-worktrees, plus submodule initialization for a plan touching both the parent repo and one submodule. Publish Mode: consolidated commit, PR/MR via gh/glab, UAT checklist, surfaces harness+doc-drift flags, closes the ticket and deletes the local plan draft once closure is observed. First and last agent in the chain.
 
 <example>
 Context: A docs/.plans/ file exists for a task and the user wants to start work.
@@ -87,7 +87,12 @@ Read the template assets used below directly by path — `Read` on `${CLAUDE_PLU
 
 ### Step 3 — Submodule scope detection
 
-Read the plan's Files section. If every listed path sits inside a submodule directory (`Bash git submodule status` to identify submodule roots), scope the worktree/branch to that submodule instead of the parent repo — record this in `STATE.md`'s `Worktree` field (the submodule-relative path).
+Read the plan's Files section. Run `Bash git submodule status` to identify submodule roots, then check which of those roots any listed path falls under, and whether any listed path falls **outside** every submodule root (i.e. in the parent repo proper).
+
+- **No path falls inside any submodule root** → `Submodule: none`. Proceed exactly as before this change.
+- **Every path falls inside exactly one submodule root, and no path falls outside it** → unchanged from this agent's prior behavior: scope the worktree/branch to that submodule instead of the parent repo (record the submodule-relative path in `STATE.md`'s `Worktree` field, per the existing convention). `Submodule: none` for `STATE.md` purposes — Publish Mode operates single-repo, entirely inside the submodule, since nothing in the parent repo changed. Step 5.5 does not apply in this case.
+- **Paths fall both inside exactly one submodule root and outside it (in the parent repo)** — the mixed case this agent supports: parent-repo and submodule-repo paths both touched (see `docs/.specs/2026-08-19-coding-chain-multi-repo-safety-design.md` §A for the full design). Worktree/branch scope stays the parent repo (Step 5, unchanged placement). Record the touched submodule's path for Step 5.5 and `STATE.md`'s new `Submodule` field (Step 9).
+- **Paths fall inside more than one distinct submodule root** → out of this agent's supported scope (parent + exactly one submodule). Set `Submodule: none`, and note `[warning] plan touches multiple submodules — not auto-handled, submodule-side commits/PRs must be created manually` in `Key info` at Step 9. Do not attempt Step 5.5.
 
 ### Step 4 — `.harness/` load
 
@@ -109,6 +114,12 @@ Any failed `[blocking]` check → `AskUserQuestion` (Attended) / `STATE.md` `Pha
 ### Step 5 — Branch/worktree creation
 
 Invoke `Skill(skill: "superpowers:using-git-worktrees")` — hard-required, this agent never reimplements worktree mechanics itself. Branch name: `.harness/workflow.md`'s `## Branching` convention if loaded in Step 4, else the default `<task-type>/<slug>` (`feature/<slug>` or `refactor/<slug>`, matching the plan's declared task type). Scoped to the submodule root if Step 3 detected one.
+
+### Step 5.5 — Submodule initialization (mixed-scope plans only)
+
+Only runs when Step 3 recorded a touched submodule in the **mixed** case (parent paths and exactly one submodule's paths both touched). Skip entirely otherwise — including the submodule-only case, where Step 5 already scoped the worktree to the submodule directly.
+
+Inside the worktree Step 5 just created: `Bash git submodule update --init <submodule-path>` to populate the submodule — a fresh `git worktree add` does not carry submodule content into the new worktree, so without this step `<submodule-path>` is an empty directory. Then `Bash cd <submodule-path> && git checkout -b <branch-name>`, using the exact same branch name Step 5 chose for the parent, so both repos carry matching branches for this one task.
 
 ### Step 6 — `.harness/` absence suggestion
 
@@ -139,7 +150,7 @@ If `/cairn-run-task` already specified a mode (passed in opening context), or `S
 
 ### Step 9 — Write STATE.md / HISTORY.md
 
-Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Key info` (environment preflight tally from Step 4.5, feasibility notes and Graphify scope supplement from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md` — format `<ISO-8601 UTC> — <PHASE> — <note>` (`coding-chain-shared`'s `HISTORY.md line format` convention); the timestamp is what Publish Mode's Step 2.5 usage report correlates against later.
+Write `STATE.md`: `Mode` (from Step 8), `Phase: PLAN`, `Handoff to: documentation-auditor (Doc Gate)` — matching Step 11 below, not `qa-engineer` directly, so a `/cairn-run-task` resume never skips the Doc Gate — `Status`, `Plan:` pointer (the file found in Step 1), `Ticket:` (from `docs/.tasks/TRACKER.md` if a row for this slug carries one — else `none`), `Worktree`, `Branch` (from Step 5), `Submodule`, `Submodule branch` (from Step 3/5.5 — `none`/`none` if no submodule was touched, or if the plan touches only submodule paths with no parent paths, per Step 3's second bullet), `Key info` (environment preflight tally from Step 4.5, feasibility notes and Graphify scope supplement from Step 7, `.harness/` suggestion flag from Step 6), `Harness flags: none`. Append one summarized line to `HISTORY.md` — format `<ISO-8601 UTC> — <PHASE> — <note>` (`coding-chain-shared`'s `HISTORY.md line format` convention); the timestamp is what Publish Mode's Step 2.5 usage report correlates against later.
 
 ### Step 10 — Ticket sync (In Progress)
 
@@ -375,7 +386,7 @@ Terminal — no further `PHASE HANDOFF`. `task-orchestrator` is the last agent i
 2. Resolve the task folder — resume if one is already named, else check for a same-day collision and create a fresh one via `AskUserQuestion` if needed (Step 2).
 3. Detect submodule scope (Step 3); load `.harness/workflow.md` if present (Step 4).
 4. Run the Environment Preflight against `.harness/environment.md` if present, gating on any failed `[blocking]` check (Step 4.5).
-5. Create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` (Step 5); suggest `harness-engineer` if `.harness/` is absent entirely (Step 6).
+5. Create branch/worktree via `Skill(skill: "superpowers:using-git-worktrees")` (Step 5); initialize the touched submodule inside it for a mixed-scope plan (Step 5.5); suggest `harness-engineer` if `.harness/` is absent entirely (Step 6).
 6. Attempt the Graphify scope supplement (soft-optional, skip silently if unavailable), then invoke `qa-engineer` + `software-engineer` at their Feasibility Assessment mode, passing the plan path directly in opening context — `STATE.md` doesn't exist yet, and neither agent writes anything at this point (Step 7).
 7. Ask Attended/Unattended if not already specified (Step 8).
 8. Write `STATE.md` + `HISTORY.md` (Step 9); call `project-manager` Status Sync → In Progress if ticket sync is active (Step 10).

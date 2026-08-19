@@ -13,6 +13,8 @@ cairn is a Claude Code **plugin** (not a project-installed framework) — a pers
 - `pytest tests/test_intent_routing.py -v -s` — the eval suite (see Testing below). Slow (~1–2 min, runs cases in parallel), requires `claude` on `PATH` with real auth, and asserts an aggregate pass rate rather than gating on any single case.
 - `bash tests/smoke/<script>.sh [plugin-dir]` — a headless smoke test (see Testing below); run individually, not via pytest.
 - `claude plugin validate . --strict` — validates the plugin manifest; same check CI (`.github/workflows/validate.yml`) runs on every push.
+- `cd dashboard && npm install && npm run test -- --run` — the dashboard SPA's Vitest + React Testing Library suite.
+- `cd dashboard && npm run build` — rebuilds the committed `dashboard/dist/` static bundle; run this after any `dashboard/src/` change (see `dashboard/README.md`'s "Shipping a change" section) since `dist/` is served directly, not built at `/cairn-dashboard` launch time.
 
 ### Testing a command end-to-end
 
@@ -100,7 +102,7 @@ Bump policy (semver: minor for new features/behavior changes, patch for fixes, s
 
 ## Testing
 
-Which of the three kinds a file belongs to, and the exact run commands, live in `.harness/standards.md`. Kept here since it's not mechanical convention: `tests/smoke/*.sh` also has `bash tests/smoke/run_all.sh [plugin-dir]` for `release-manager`'s suite specifically, and every script asserts against observable output/artifacts (a saved file, a `STATE.md` field, whether a `tmux` session still exists) rather than parsing the outer CLI's paraphrased text — that text varies run to run. Each script only exercises what a non-interactive run can reach — for `release-manager` that's Detect→Propose; anything gated behind an `AskUserQuestion` confirmation (Execute-step mechanics) has no automated coverage and is verified by code inspection instead.
+Which of the four kinds a file belongs to, and the exact run commands, live in `.harness/standards.md`. Kept here since it's not mechanical convention: `tests/smoke/*.sh` also has `bash tests/smoke/run_all.sh [plugin-dir]` for `release-manager`'s suite specifically, and every script asserts against observable output/artifacts (a saved file, a `STATE.md` field, whether a `tmux` session still exists) rather than parsing the outer CLI's paraphrased text — that text varies run to run. Each script only exercises what a non-interactive run can reach — for `release-manager` that's Detect→Propose; anything gated behind an `AskUserQuestion` confirmation (Execute-step mechanics) has no automated coverage and is verified by code inspection instead.
 
 <!-- cairn:start -->
 ## cairn (mandatory entrypoint)

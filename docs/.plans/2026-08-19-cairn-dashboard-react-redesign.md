@@ -751,6 +751,14 @@ export interface UsageSession {
   cache_creation_input_tokens: number
   cache_read_input_tokens: number
   calls: number
+  // Per-session subagent/skill invocation counts — usage_dashboard.py already
+  // parses these from Agent/Skill tool_use blocks per transcript (see
+  // CLAUDE.md's usage_dashboard.py description) to build the all-time
+  // by_subagent/by_skill totals below; this just exposes the same per-session
+  // counts instead of only the aggregate, so Task 8's ranking panels can
+  // compute a Window-scoped (not just All-time) breakdown client-side.
+  subagents: Record<string, number>
+  skills: Record<string, number>
 }
 
 export interface RankedRow {
@@ -944,6 +952,7 @@ git commit -m "chore: bump dashboard submodule pointer — scaffold"
 - Usage heatmap likewise adapted from maestro's `renderHeatmap()` (same reference file): a GitHub-style calendar layout (not a "contribution" concept — cells are colored by usage volume, not commit/contribution activity) covering full session history, Sunday-start weeks, Jan 1 of the earliest activity year through the latest session day, 5 intensity levels by quartile of per-day token volume against the busiest day. Deliberately independent of `period`/`anchor` (always full history) but re-bucketed on the `tz` toggle, same as the chart.
 - Sessions table is sortable/filterable/paginated (`PAGE_SIZE = 5`), adapted from maestro's generic `renderTable()` (click-to-sort, second click reverses) plus a Model/Version filter pair scoped to the current period window — new columns Model(s) and Tokens (total, with an input/output/cache-write/cache-read breakdown in the `title` attribute). Filter and sort selections persist across a period/anchor/tz switch; page resets to 0 since the underlying row set changed.
 - Cost-over-time chart carries a `chartMetric` toggle (`'cost' | 'tokens'`, default `'cost'`) — same bucketed window, same zero-fill, just a different per-session value summed into each bucket.
+- Ranking panels (By model/By cairn version/Top subagents/Top skills) render above the chart and carry a `rankingsScope` toggle (`'window' | 'all'`, default `'window'`) — All-time reads `data.by_model`/etc. unchanged (server-aggregated); Window aggregates client-side from `sessions` via `aggregateSessions()`, which depends on this task's `subagents`/`skills` fields added to `UsageSession` (Task 7) above.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -959,6 +968,7 @@ function session(id: string, ts: string, cost = 1.23) {
     session_id: id, timestamp: ts, models: ['claude-sonnet-5'], version: '0.18.0',
     cost, unpriced_calls: 0, input_tokens: 100, output_tokens: 200,
     cache_creation_input_tokens: 0, cache_read_input_tokens: 0, calls: 5,
+    subagents: { 'qa-engineer': 2 }, skills: { 'writer-shared': 1 },
   }
 }
 
@@ -1087,6 +1097,20 @@ describe('UsageTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tokens' }))
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: 'Tokens' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('toggles ranking panels between Window and All-time scope', async () => {
+    const scoped = { ...sampleData, by_model: [{ model: 'claude-opus-5', calls: 99 } as never] }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ json: () => Promise.resolve(scoped) } as Response)))
+    render(<UsageTab />)
+    await waitFor(() => expect(screen.getByText('abc123')).toBeInTheDocument())
+
+    // Window (default): derived client-side from the windowed sessions, not data.by_model
+    expect(screen.getByText(/claude-sonnet-5/)).toBeInTheDocument()
+    expect(screen.queryByText(/claude-opus-5/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'All-time' }))
+    expect(screen.getByText(/claude-opus-5/)).toBeInTheDocument()
   })
 
   it('paginates the sessions table past the page size', async () => {
@@ -1276,6 +1300,29 @@ function buildHeatmapWeeks(sessions: UsageSession[], tz: Timezone): HeatmapCell[
   return weeks
 }
 
+// Window-scope ranking aggregation, client-side from the already-windowed
+// `sessions` list — the All-time scope instead reads data.by_model/etc.
+// directly (server-aggregated, unchanged from before this toggle existed).
+// Approximation: model/version dimensions count session occurrences (a
+// multi-model session counts once per model it used), not a real per-model
+// cost split — UsageSession.models is a plain string[], no per-model cost
+// attribution exists client-side. subagent/skill dimensions ARE exact,
+// since UsageSession.subagents/skills already carry real per-session counts.
+type RankingDimension = 'model' | 'version' | 'subagent' | 'skill'
+function aggregateSessions(sessions: UsageSession[], dimension: RankingDimension): RankedRow[] {
+  const totals: Record<string, number> = {}
+  const bump = (key: string, n: number) => { totals[key] = (totals[key] || 0) + n }
+  sessions.forEach((s) => {
+    if (dimension === 'model') s.models.forEach((m) => bump(m, 1))
+    else if (dimension === 'version') bump(s.version, 1)
+    else if (dimension === 'subagent') Object.entries(s.subagents).forEach(([k, v]) => bump(k, v))
+    else Object.entries(s.skills).forEach(([k, v]) => bump(k, v))
+  })
+  return Object.entries(totals)
+    .map(([key, calls]) => ({ [dimension]: key, calls }) as RankedRow)
+    .sort((a, b) => b.calls - a.calls)
+}
+
 type SortKey = 'session_id' | 'timestamp' | 'models' | 'tokens' | 'calls' | 'cost' | 'version'
 const PAGE_SIZE = 5
 const SESSION_COLUMNS: [SortKey, string][] = [
@@ -1293,6 +1340,7 @@ export default function UsageTab() {
   const [filterModel, setFilterModel] = useState('all')
   const [filterVersion, setFilterVersion] = useState('all')
   const [chartMetric, setChartMetric] = useState<'cost' | 'tokens'>('cost')
+  const [rankingsScope, setRankingsScope] = useState<'window' | 'all'>('window')
   const [page, setPage] = useState(0)
 
   useEffect(() => {
@@ -1364,6 +1412,15 @@ export default function UsageTab() {
     setPage(0)
   }
 
+  const rankings = rankingsScope === 'all'
+    ? { model: data.by_model, version: data.by_version, subagent: data.by_subagent, skill: data.by_skill }
+    : {
+        model: aggregateSessions(sessions, 'model'),
+        version: aggregateSessions(sessions, 'version'),
+        subagent: aggregateSessions(sessions, 'subagent'),
+        skill: aggregateSessions(sessions, 'skill'),
+      }
+
   return (
     <div>
       {/* Shown first, above the period toolbar — the heatmap is static (full
@@ -1417,6 +1474,27 @@ export default function UsageTab() {
           <div>{totals.unpriced_calls} call(s) used a model with no pricing entry — excluded from cost total.</div>
         )}
       </div>
+      <div role="group" aria-label="Ranking scope">
+        <button aria-selected={rankingsScope === 'window'} onClick={() => setRankingsScope('window')}>Window</button>
+        <button aria-selected={rankingsScope === 'all'} onClick={() => setRankingsScope('all')}>All-time</button>
+      </div>
+      {([
+        ['model', 'By model'], ['version', 'By cairn version'],
+        ['subagent', 'Top subagents'], ['skill', 'Top skills'],
+      ] as [RankingDimension, string][]).map(([dim, label]) => (
+        <div key={dim}>
+          <h3>{label}</h3>
+          {rankings[dim].length === 0 ? (
+            <div className="empty">No data yet.</div>
+          ) : (
+            <ul>
+              {rankings[dim].map((row, i) => (
+                <li key={i}>{JSON.stringify(row)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
       <div className="chart-card">
         <div role="group" aria-label="Chart metric">
           <button aria-selected={chartMetric === 'cost'} onClick={() => setChartMetric('cost')}>Cost</button>
@@ -1431,16 +1509,6 @@ export default function UsageTab() {
           })}
         </svg>
       </div>
-      <h3>By model</h3>
-      {data.by_model.length === 0 ? (
-        <div className="empty">No data yet.</div>
-      ) : (
-        <ul>
-          {data.by_model.map((row, i) => (
-            <li key={i}>{JSON.stringify(row)}</li>
-          ))}
-        </ul>
-      )}
       <h3>Sessions</h3>
       {sessions.length === 0 ? (
         <div className="empty">No sessions in this window.</div>
@@ -1511,7 +1579,7 @@ Fix `shiftAnchor`'s yearly branch before running tests — the version above has
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd dashboard && npm run test -- --run UsageTab`
-Expected: PASS (11 tests)
+Expected: PASS (12 tests)
 
 - [ ] **Step 5: Commit**
 

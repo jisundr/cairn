@@ -8,7 +8,7 @@
 
 **Tech Stack:** Backend: Python 3 stdlib only (`http.server`, `subprocess`, `pathlib`, `mimetypes`) — no new dependency. Frontend: Vite, React 18, TypeScript, Vitest + React Testing Library (dev-time only).
 
-**Spec:** `docs/.specs/2026-08-19-dashboard-react-redesign-design.md` (integration design), `dashboard/docs/requirements/prd.md` (FR-001–FR-012, NFR-001–NFR-003 — FR-005 Merged into NFR-001, FR-011 Removed), `dashboard/docs/requirements/user-stories.md` (US-001–US-004), `dashboard/docs/requirements/user-flows.md` (UF-001–UF-004), `dashboard/docs/architecture/architecture-spec.md`.
+**Spec:** `docs/.specs/2026-08-19-dashboard-react-redesign-design.md` (integration design), `docs/cairn-dashboard/requirements/prd.md` (FR-001–FR-012, NFR-001–NFR-003 — FR-005 Merged into NFR-001, FR-011 Removed), `docs/cairn-dashboard/requirements/user-stories.md` (US-001–US-004), `docs/cairn-dashboard/requirements/user-flows.md` (UF-001–UF-004), `docs/cairn-dashboard/architecture/architecture-spec.md`.
 
 ## Global Constraints
 

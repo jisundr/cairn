@@ -698,17 +698,20 @@ def test_plugin_root_resolves_to_the_repo_the_script_lives_in():
 
 
 def test_do_get_serves_static_assets_from_plugin_root_not_cwd(tmp_path, monkeypatch):
-    # The consuming project (`cwd`) has its own dashboard/dist with different
+    # The consuming project (`cwd`) has its own dashboard-dist with different
     # content. Before issue #14's fix, the server resolved static assets from
     # `Path(cwd) / "dashboard" / "dist"` and would have served this instead.
+    # dashboard-dist/ (an ordinary tracked directory, not the dashboard/
+    # submodule's dist/ output) is what's actually served now — see the
+    # follow-up to PR #15 / issue #14's remaining gap.
     cwd = tmp_path / "consuming_project"
-    cwd_dist = cwd / "dashboard" / "dist"
+    cwd_dist = cwd / "dashboard-dist"
     cwd_dist.mkdir(parents=True)
     (cwd_dist / "index.html").write_text("<html>wrong: served from cwd</html>")
 
     # The plugin's own install root has the real build output.
     plugin_root = tmp_path / "plugin_root"
-    plugin_dist = plugin_root / "dashboard" / "dist"
+    plugin_dist = plugin_root / "dashboard-dist"
     plugin_dist.mkdir(parents=True)
     (plugin_dist / "index.html").write_text("<html>correct: served from plugin root</html>")
 
@@ -735,9 +738,10 @@ def test_do_get_serves_static_assets_from_plugin_root_not_cwd(tmp_path, monkeypa
 
 
 def test_do_get_static_500_reports_plugin_root_path_when_dist_missing(tmp_path, monkeypatch):
-    # When dashboard/dist/ is missing at PLUGIN_ROOT (submodule never
-    # initialized), the 500 error must point at the plugin's install
-    # location, not at cwd, so the user knows where to actually fix it.
+    # When dashboard-dist/ is missing at PLUGIN_ROOT (shouldn't happen on a
+    # normal checkout, since it's ordinary tracked content, not a submodule
+    # gitlink), the 500 error must point at the plugin's install location,
+    # not at cwd, so the user knows where to actually fix it.
     cwd = tmp_path / "consuming_project"
     cwd.mkdir()
 
@@ -763,5 +767,5 @@ def test_do_get_static_500_reports_plugin_root_path_when_dist_missing(tmp_path, 
         thread.join(timeout=5)
 
     assert status == 500
-    assert str(plugin_root / "dashboard" / "dist") in body
+    assert str(plugin_root / "dashboard-dist") in body
     assert str(cwd) not in body

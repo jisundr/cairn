@@ -6,8 +6,10 @@ files — no model calls, no `claude` CLI, fully deterministic. Always
 green; a failure here is a real regression, not model variance.
 """
 
+import http.client
 import importlib.util
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -686,3 +688,80 @@ def test_serve_static_blocks_path_traversal(tmp_path):
 
     content_type, body = usage_dashboard.serve_static(dist, "/../secret.txt")
     assert body == b"<html>spa root</html>"
+
+
+def test_plugin_root_resolves_to_the_repo_the_script_lives_in():
+    # PLUGIN_ROOT must be derived from the script's own file location
+    # (scripts/usage_dashboard.py -> repo root), not from any notion of cwd —
+    # that's the whole point of issue #14's fix.
+    assert usage_dashboard.PLUGIN_ROOT == SCRIPT_PATH.resolve().parent.parent
+
+
+def test_do_get_serves_static_assets_from_plugin_root_not_cwd(tmp_path, monkeypatch):
+    # The consuming project (`cwd`) has its own dashboard/dist with different
+    # content. Before issue #14's fix, the server resolved static assets from
+    # `Path(cwd) / "dashboard" / "dist"` and would have served this instead.
+    cwd = tmp_path / "consuming_project"
+    cwd_dist = cwd / "dashboard" / "dist"
+    cwd_dist.mkdir(parents=True)
+    (cwd_dist / "index.html").write_text("<html>wrong: served from cwd</html>")
+
+    # The plugin's own install root has the real build output.
+    plugin_root = tmp_path / "plugin_root"
+    plugin_dist = plugin_root / "dashboard" / "dist"
+    plugin_dist.mkdir(parents=True)
+    (plugin_dist / "index.html").write_text("<html>correct: served from plugin root</html>")
+
+    monkeypatch.setattr(usage_dashboard, "PLUGIN_ROOT", plugin_root)
+
+    projects_root = tmp_path / "claude_projects"
+    projects_root.mkdir()
+    handler_cls = usage_dashboard.make_handler(str(cwd), projects_root)
+    server = usage_dashboard.http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request("GET", "/")
+        response = conn.getresponse()
+        body = response.read().decode("utf-8")
+        conn.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert "correct: served from plugin root" in body
+    assert "wrong: served from cwd" not in body
+
+
+def test_do_get_static_500_reports_plugin_root_path_when_dist_missing(tmp_path, monkeypatch):
+    # When dashboard/dist/ is missing at PLUGIN_ROOT (submodule never
+    # initialized), the 500 error must point at the plugin's install
+    # location, not at cwd, so the user knows where to actually fix it.
+    cwd = tmp_path / "consuming_project"
+    cwd.mkdir()
+
+    plugin_root = tmp_path / "plugin_root"
+    plugin_root.mkdir()
+    monkeypatch.setattr(usage_dashboard, "PLUGIN_ROOT", plugin_root)
+
+    projects_root = tmp_path / "claude_projects"
+    projects_root.mkdir()
+    handler_cls = usage_dashboard.make_handler(str(cwd), projects_root)
+    server = usage_dashboard.http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request("GET", "/")
+        response = conn.getresponse()
+        status = response.status
+        body = response.read().decode("utf-8")
+        conn.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert status == 500
+    assert str(plugin_root / "dashboard" / "dist") in body
+    assert str(cwd) not in body

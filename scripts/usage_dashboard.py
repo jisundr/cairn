@@ -11,8 +11,11 @@ hooks/scripts/log-version.sh on SessionStart) instead, joined in by
 session id.
 
 stdlib only, no dependencies. Serves:
-  GET /*            dashboard/dist/ static files (the React SPA), SPA fallback to
-                    index.html for unknown paths, 500 if dashboard/dist/ is missing
+  GET /*            dashboard/dist/ static files (the React SPA), resolved from the
+                    plugin's own install root (PLUGIN_ROOT below) — never from `cwd`,
+                    which is the consuming project's directory and has no dashboard/
+                    of its own. SPA fallback to index.html for unknown paths, 500 if
+                    dashboard/dist/ is missing (submodule not initialized).
   GET /api/usage    current usage aggregation, as JSON
   GET /api/tracker  docs/.tasks/TRACKER.md rows, as JSON (empty list if absent)
   GET /api/swarms   Mode: Unattended tasks under docs/.tasks/*/STATE.md, as JSON
@@ -28,6 +31,14 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# The plugin's own install root — this script always lives at <plugin-root>/scripts/
+# usage_dashboard.py, regardless of whether that root is a dev checkout, a marketplace
+# clone, or Claude Code's flat installed-plugin cache. Static dashboard assets
+# (dashboard/dist/) ship with the plugin itself and must be resolved from here, never
+# from `cwd` — `cwd` is the *consuming* project's directory, which has no dashboard/
+# of its own.
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_PORT = 4756
 PLAN_WINDOW_LOOKBACK_SECONDS = 3600  # no HISTORY.md entry precedes PLAN's own line, so approximate its start
@@ -545,11 +556,16 @@ def make_handler(cwd: str, projects_root: Path):
                 else:
                     self._send(404, "text/plain", "not found")
                 return
-            result = serve_static(Path(cwd) / "dashboard" / "dist", self.path)
+            result = serve_static(PLUGIN_ROOT / "dashboard" / "dist", self.path)
             if result is None:
                 self._send(
                     500, "text/plain",
-                    "dashboard/dist/ not found. Run: git submodule update --init dashboard",
+                    f"dashboard/dist/ not found at the plugin's install location "
+                    f"({PLUGIN_ROOT / 'dashboard' / 'dist'}). This means the dashboard "
+                    f"submodule was never initialized in the plugin's marketplace clone "
+                    f"before this copy of the plugin was installed/updated — /cairn-dashboard "
+                    f"should have caught this before starting the server; see its Step 3 for "
+                    f"how to fix it.",
                 )
                 return
             content_type, body = result

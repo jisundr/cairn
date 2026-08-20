@@ -11,11 +11,16 @@ hooks/scripts/log-version.sh on SessionStart) instead, joined in by
 session id.
 
 stdlib only, no dependencies. Serves:
-  GET /*            dashboard/dist/ static files (the React SPA), resolved from the
-                    plugin's own install root (PLUGIN_ROOT below) — never from `cwd`,
-                    which is the consuming project's directory and has no dashboard/
-                    of its own. SPA fallback to index.html for unknown paths, 500 if
-                    dashboard/dist/ is missing (submodule not initialized).
+  GET /*            dashboard-dist/ static files (the React SPA's build output),
+                    resolved from the plugin's own install root (PLUGIN_ROOT below)
+                    — never from `cwd`, which is the consuming project's directory
+                    and has no dashboard-dist/ of its own. dashboard-dist/ is an
+                    ordinary git-tracked directory (synced from the dashboard/
+                    submodule's dist/ output via scripts/sync_dashboard_dist.sh),
+                    so it's present on any copy of the plugin with no submodule
+                    step required at runtime. SPA fallback to index.html for
+                    unknown paths, 500 if dashboard-dist/ is missing (shouldn't
+                    happen on a normal checkout of the plugin).
   GET /api/usage    current usage aggregation, as JSON
   GET /api/tracker  docs/.tasks/TRACKER.md rows, as JSON (empty list if absent)
   GET /api/swarms   Mode: Unattended tasks under docs/.tasks/*/STATE.md, as JSON
@@ -35,9 +40,9 @@ from pathlib import Path
 # The plugin's own install root — this script always lives at <plugin-root>/scripts/
 # usage_dashboard.py, regardless of whether that root is a dev checkout, a marketplace
 # clone, or Claude Code's flat installed-plugin cache. Static dashboard assets
-# (dashboard/dist/) ship with the plugin itself and must be resolved from here, never
-# from `cwd` — `cwd` is the *consuming* project's directory, which has no dashboard/
-# of its own.
+# (dashboard-dist/) ship with the plugin itself and must be resolved from here, never
+# from `cwd` — `cwd` is the *consuming* project's directory, which has no
+# dashboard-dist/ of its own.
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_PORT = 4756
@@ -198,7 +203,7 @@ def discover_swarms(cwd: str) -> list:
 def serve_static(dist_dir: Path, request_path: str):
     """Resolve a static asset under dist_dir, falling back to index.html for
     the SPA root/any client-side route. None if dist_dir/index.html itself
-    doesn't exist (submodule not initialized)."""
+    doesn't exist."""
     index = dist_dir / "index.html"
     if not index.exists():
         return None
@@ -556,15 +561,15 @@ def make_handler(cwd: str, projects_root: Path):
                 else:
                     self._send(404, "text/plain", "not found")
                 return
-            result = serve_static(PLUGIN_ROOT / "dashboard" / "dist", self.path)
+            result = serve_static(PLUGIN_ROOT / "dashboard-dist", self.path)
             if result is None:
                 self._send(
                     500, "text/plain",
-                    f"dashboard/dist/ not found at the plugin's install location "
-                    f"({PLUGIN_ROOT / 'dashboard' / 'dist'}). This means the dashboard "
-                    f"submodule was never initialized in the plugin's marketplace clone "
-                    f"before this copy of the plugin was installed/updated — /cairn-dashboard "
-                    f"should have caught this before starting the server; see its Step 3 for "
+                    f"dashboard-dist/ not found at the plugin's install location "
+                    f"({PLUGIN_ROOT / 'dashboard-dist'}). This directory ships as "
+                    f"ordinary tracked content with the plugin itself, so this "
+                    f"shouldn't happen on a normal checkout — /cairn-dashboard should "
+                    f"have caught this before starting the server; see its Step 3 for "
                     f"how to fix it.",
                 )
                 return

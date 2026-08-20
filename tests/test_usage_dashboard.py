@@ -44,6 +44,10 @@ def test_encode_project_dir_replaces_slashes():
     assert usage_dashboard.encode_project_dir("/Users/me/cairn") == "-Users-me-cairn"
 
 
+def test_encode_project_dir_replaces_all_non_alphanumeric_chars():
+    assert usage_dashboard.encode_project_dir("/Users/jay.son/my_repo") == "-Users-jay-son-my-repo"
+
+
 def test_aggregate_usage_sums_tokens_and_joins_version(tmp_path):
     cwd = tmp_path / "myproject"
     cwd.mkdir()

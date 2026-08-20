@@ -358,7 +358,7 @@ def build_window_report(cwd: str, projects_root: Path, start_iso: str, end_iso: 
 
 
 def encode_project_dir(cwd: str) -> str:
-    return cwd.replace("/", "-")
+    return re.sub(r"[^A-Za-z0-9]", "-", cwd)
 
 
 def load_version_log(cwd: str) -> dict:
